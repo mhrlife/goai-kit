@@ -67,6 +67,10 @@ func main() {
 
 Remember to set the `OPENAI_API_KEY` environment variable or provide it via `goaikit.WithAPIKey`.
 
+## JSON Schema Tags
+
+This package uses `github.com/invopop/jsonschema` to infer the JSON schema from your Go types. You can leverage the various `jsonschema` struct tags (like `description`, `example`, `enum`, etc.) to customize the generated schema. Refer to the `invopop/jsonschema` documentation for available tags and their usage.
+
 ## Compatibility
 
 This package is designed to work with **OpenAI-like interfaces**. You can change the base URL to point to compatible APIs (like OpenRouter, etc.) by setting the `OPENAI_API_BASE` environment variable or using the `goaikit.WithBaseURL` functional option when creating the client.
