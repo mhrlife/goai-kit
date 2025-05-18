@@ -65,6 +65,60 @@ func main() {
 }
 ```
 
+### Using with Google Gemini (OpenAI-like API)
+
+You can also use `goai-kit` with other services that provide an OpenAI-compatible API, such as Google Gemini via their OpenAI endpoint.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/joho/godotenv" // Optional: for loading .env file
+	"github.com/mhrlife/goai-kit"
+	"log/slog"
+)
+
+// Define a struct for the expected JSON output
+type GeminiOutput struct {
+	Greeting string `json:"greeting"`
+	Number   int    `json:"number"`
+}
+
+func main() {
+	// Load environment variables (optional)
+	godotenv.Load()
+
+	// Create a new client configured for Google Gemini's OpenAI endpoint
+	// Ensure GEMINI_API_KEY environment variable is set
+	client := goaikit.NewClient(
+		goaikit.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+		goaikit.WithDefaultModel("gemini-2.0-flash-001"), // Use a Gemini model
+		goaikit.WithBaseURL("https://generativelanguage.googleapis.com/v1beta/openai/"), // Gemini's OpenAI endpoint
+		goaikit.WithLogLevel(slog.LevelDebug), // Set logging level (optional)
+	)
+
+	// Define the options for the Ask request
+	options := goaikit.AskOptions{
+		Prompt: "Say hello and give me a positive, between 10 and 20, number.",
+	}
+
+	// Make the Ask request
+	out, err := goaikit.Ask[GeminiOutput](context.Background(), client, options)
+	if err != nil {
+		log.Fatalf("Error asking LLM: %v", err)
+	}
+
+	// Use the unmarshaled output
+	fmt.Printf("Received greeting: %s\n", out.Greeting)
+	fmt.Printf("Received number: %d\n", out.Number)
+}
+```
+
 Remember to set the `OPENAI_API_KEY` environment variable or provide it via `goaikit.WithAPIKey`.
 
 ## JSON Schema Tags
