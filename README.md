@@ -30,10 +30,10 @@ import (
 	"log/slog"
 )
 
-// Define a struct for the expected JSON output
+// Define a struct for the expected JSON output, using jsonschema tags
 type MyOutput struct {
-	Message string `json:"message"`
-	Value   int    `json:"value"`
+	Message string `json:"message" jsonschema:"description=A greeting message,example=hello"`
+	Value   int    `json:"value" jsonschema:"description=An integer value,required"`
 }
 
 func main() {
