@@ -14,7 +14,7 @@ func LoggingMiddleware(logger *slog.Logger, level slog.Level) option.Middleware 
 	return func(request *http.Request, next option.MiddlewareNext) (*http.Response, error) {
 		// Use the provided logger if the configured log level is sufficient
 		if logger.Enabled(request.Context(), level) {
-			logger.Info("OpenAI Request",
+			logger.Debug("OpenAI Request",
 				slog.String("method", request.Method),
 				slog.String("url", request.URL.String()),
 			)
@@ -30,7 +30,7 @@ func LoggingMiddleware(logger *slog.Logger, level slog.Level) option.Middleware 
 					if len(bodyString) > 1024 { // Log first 1KB
 						bodyString = bodyString[:1024] + "..."
 					}
-					logger.Info("OpenAI Request Body", slog.String("body", bodyString))
+					logger.Debug("OpenAI Request Body", slog.String("body", bodyString))
 					request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes)) // Reset the body
 				}
 			}
@@ -48,7 +48,7 @@ func LoggingMiddleware(logger *slog.Logger, level slog.Level) option.Middleware 
 		}
 
 		if logger.Enabled(request.Context(), level) {
-			logger.Info("OpenAI Response",
+			logger.Debug("OpenAI Response",
 				slog.String("status", resp.Status),
 			)
 
@@ -64,7 +64,7 @@ func LoggingMiddleware(logger *slog.Logger, level slog.Level) option.Middleware 
 					if len(bodyString) > 1024 { // Log first 1KB
 						bodyString = bodyString[:1024] + "..."
 					}
-					logger.Info("OpenAI Response Body", slog.String("body", bodyString))
+					logger.Debug("OpenAI Response Body", slog.String("body", bodyString))
 					resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				}
 			}

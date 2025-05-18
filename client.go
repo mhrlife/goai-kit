@@ -26,16 +26,10 @@ type Config struct {
 
 // NewClient creates a new goaikit Client with the given options.
 func NewClient(opts ...ClientOption) *Client {
-	// Initialize a default config with a default log level
 	c := Config{
 		RequestOptions: make([]option.RequestOption, 0),
-		LogLevel:       slog.LevelInfo, // Default log level
+		LogLevel:       slog.LevelError,
 	}
-
-	// Create a logger instance for the client
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: c.LogLevel,
-	}))
 
 	// Apply environment variables as initial defaults if options are not provided
 	if os.Getenv("OPENAI_API_BASE") != "" {
@@ -49,6 +43,10 @@ func NewClient(opts ...ClientOption) *Client {
 	for _, opt := range opts {
 		opt(&c)
 	}
+
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: c.LogLevel,
+	}))
 
 	// Add API Key and Base URL from config to RequestOptions if they are set
 	// These are added *after* user-provided RequestOptions via WithRequestOptions

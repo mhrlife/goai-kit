@@ -2,8 +2,9 @@ package goaikit
 
 import (
 	"context"
-	"fmt"
 	"github.com/stretchr/testify/require"
+	"log/slog"
+	"os"
 	"testing"
 )
 
@@ -14,20 +15,35 @@ type TestOutput struct {
 }
 
 func TestRequestWithActualRequest(t *testing.T) {
-	// Create a goaikit Client using the mock OpenAI client
-	// Use functional options for configuration
 	goaiClient := NewClient(
-		WithDefaultModel("openrouter-gemini-2.5-flash-preview"),
-		WithLogLevel(slog.LevelDebug), // Example: Set log level to Debug
+		WithDefaultModel("gpt-4o-mini"),
+		WithLogLevel(slog.LevelDebug),
 	)
 	// Create AskOptions
 	options := AskOptions{
-		Prompt: "Say hello and give me a number.",
+		Prompt: "Say hello and give me a positive, between 10 and 20, number.",
 	}
 
 	out, err := Ask[TestOutput](context.Background(), goaiClient, options)
 
 	require.NoError(t, err)
+	require.NotZero(t, out.Number)
+}
 
-	fmt.Println(out)
+func TestGoogleGeminiOpenAI(t *testing.T) {
+	goaiClient := NewClient(
+		WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+		WithDefaultModel("gemini-2.0-flash-001"),
+		WithBaseURL("https://generativelanguage.googleapis.com/v1beta/openai/"),
+	)
+
+	options := AskOptions{
+		Prompt: "Say hello and give me a positive, between 10 and 20, number.",
+	}
+
+	out, err := Ask[TestOutput](context.Background(), goaiClient, options)
+
+	require.NoError(t, err)
+	require.NotZero(t, out.Number)
+
 }
