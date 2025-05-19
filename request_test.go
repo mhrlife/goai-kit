@@ -19,13 +19,10 @@ func TestRequestWithActualRequest(t *testing.T) {
 		WithDefaultModel("gpt-4o-mini"),
 		WithLogLevel(slog.LevelDebug),
 	)
-	// Create AskOptions
-	options := AskOptions{
-		Prompt: "Say hello and give me a positive, between 10 and 20, number.",
-	}
 
-	out, err := Ask[TestOutput](context.Background(), goaiClient, options)
-
+	out, err := Ask[TestOutput](context.Background(), goaiClient,
+		WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
+	)
 	require.NoError(t, err)
 	require.NotZero(t, out.Number)
 }
@@ -36,12 +33,9 @@ func TestGoogleGeminiOpenAI(t *testing.T) {
 		WithDefaultModel("gemini-2.0-flash-001"),
 		WithBaseURL("https://generativelanguage.googleapis.com/v1beta/openai/"),
 	)
-
-	options := AskOptions{
-		Prompt: "Say hello and give me a positive, between 10 and 20, number.",
-	}
-
-	out, err := Ask[TestOutput](context.Background(), goaiClient, options)
+	out, err := Ask[TestOutput](context.Background(), goaiClient,
+		WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
+	)
 
 	require.NoError(t, err)
 	require.NotZero(t, out.Number)

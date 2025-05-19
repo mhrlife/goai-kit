@@ -48,13 +48,13 @@ func main() {
 		goaikit.WithLogLevel(slog.LevelDebug),   // Set logging level (optional)
 	)
 
-	// Define the options for the Ask request
-	options := goaikit.AskOptions{
-		Prompt: "Generate a JSON object with a 'message' field saying 'hello' and a 'value' field with the number 42.",
-	}
-
 	// Make the Ask request
-	output, err := goaikit.Ask[MyOutput](context.Background(), client, options)
+	output, err := goaikit.Ask[MyOutput](context.Background(), client,
+		goaikit.WithPrompt("Generate a JSON object with a 'message' field saying 'hello' and a 'value' field with the number 42."),
+		// Example of setting other parameters:
+		// goaikit.WithTemperature(0.5),
+		// goaikit.WithMaxTokens(50),
+	)
 	if err != nil {
 		log.Fatalf("Error asking LLM: %v", err)
 	}
@@ -102,13 +102,10 @@ func main() {
 		goaikit.WithLogLevel(slog.LevelDebug), // Set logging level (optional)
 	)
 
-	// Define the options for the Ask request
-	options := goaikit.AskOptions{
-		Prompt: "Say hello and give me a positive, between 10 and 20, number.",
-	}
-
 	// Make the Ask request
-	out, err := goaikit.Ask[GeminiOutput](context.Background(), client, options)
+	out, err := goaikit.Ask[GeminiOutput](context.Background(), client,
+		goaikit.WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
+	)
 	if err != nil {
 		log.Fatalf("Error asking LLM: %v", err)
 	}

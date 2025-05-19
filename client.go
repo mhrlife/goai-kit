@@ -61,7 +61,6 @@ func NewClient(opts ...ClientOption) *Client {
 	// Add default middleware (like logging)
 	c.RequestOptions = append(
 		c.RequestOptions,
-		option.WithMaxRetries(3),
 		option.WithMiddleware(LoggingMiddleware(logger, c.LogLevel)),
 	)
 
