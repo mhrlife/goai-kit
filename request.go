@@ -25,6 +25,7 @@ type AskConfig struct {
 	TopP             *float64 // Pointer
 	User             string
 	Seed             *int64 // Pointer
+	ExtraFields      map[string]any
 
 	// AskSpecificRequestOptions are openai-go client options specific to this Ask call.
 	AskSpecificRequestOptions []option.RequestOption
@@ -35,7 +36,11 @@ type AskConfig struct {
 type AskOption func(*AskConfig)
 
 // WithPrompt sets the prompt for the Ask request.
-func WithPrompt(prompt string) AskOption {
+func WithPrompt(prompt string, formatting ...any) AskOption {
+	if len(formatting) > 0 {
+		prompt = fmt.Sprintf(prompt, formatting...)
+	}
+
 	return func(ac *AskConfig) { ac.Prompt = prompt }
 }
 
@@ -91,6 +96,24 @@ func WithRetries(retries uint) AskOption {
 	return func(ac *AskConfig) { ac.Retries = retries }
 }
 
+func WithExtraFields(fields map[string]any) AskOption {
+	return func(config *AskConfig) {
+		config.ExtraFields = fields
+	}
+}
+
+func WithOpenRouterProviders(providers ...string) AskOption {
+	return func(config *AskConfig) {
+		if config.ExtraFields == nil {
+			config.ExtraFields = make(map[string]any)
+		}
+
+		config.ExtraFields["provider"] = map[string]any{
+			"only": providers,
+		}
+	}
+}
+
 func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) (*Output, error) {
 	var output Output
 
@@ -138,6 +161,9 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 	}
 	if cfg.Seed != nil {
 		params.Seed = param.NewOpt(*cfg.Seed)
+	}
+	if cfg.ExtraFields != nil {
+		params.WithExtraFields(cfg.ExtraFields)
 	}
 
 	schema := InferJSONSchema(output)
