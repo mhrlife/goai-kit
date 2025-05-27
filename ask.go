@@ -152,6 +152,6 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 		params.Seed = param.NewOpt(*cfg.Seed)
 	}
 	if cfg.ExtraFields != nil {
-		params.WithExtraFields(cfg.ExtraFields)
+		params.SetExtraFields(cfg.ExtraFields)
 	}
 }
