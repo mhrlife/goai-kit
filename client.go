@@ -1,6 +1,7 @@
 package goaikit
 
 import (
+	"github.com/henomis/langfuse-go"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"log/slog" // Import slog
@@ -22,6 +23,12 @@ type Config struct {
 	RequestOptions []option.RequestOption
 	DefaultModel   string
 	LogLevel       slog.Level // Add LogLevel field
+	BeforeRequest  []BeforeRequestHook
+	AfterRequest   []AfterRequestHook
+
+	// Plugin Options
+
+	lf *langfuse.Langfuse
 }
 
 // NewClient creates a new goaikit Client with the given options.
@@ -71,37 +78,24 @@ func NewClient(opts ...ClientOption) *Client {
 	}
 }
 
-// WithAPIKey sets the API key for the client.
-func WithAPIKey(apiKey string) ClientOption {
-	return func(c *Config) {
-		c.ApiKey = apiKey
+// applyBeforeRequestHooks applies the BeforeRequest hooks.
+// It returns the modified parameters after applying all hooks.
+func (c *Client) applyBeforeRequestHooks(ctx *Context, params openai.ChatCompletionNewParams) openai.ChatCompletionNewParams {
+	modifiedParams := params
+	for _, hook := range c.config.BeforeRequest {
+		// The hook returns a modified ChatCompletionNewParams
+		modifiedParams = hook(ctx, modifiedParams)
 	}
+	return modifiedParams
 }
 
-// WithBaseURL sets the base URL for the client.
-func WithBaseURL(baseURL string) ClientOption {
-	return func(c *Config) {
-		c.ApiBase = baseURL
+// applyAfterRequestHooks applies the AfterRequest hooks.
+// It returns the modified response and error after applying all hooks.
+func (c *Client) applyAfterRequestHooks(ctx *Context, response *openai.ChatCompletion, err error) (*openai.ChatCompletion, error) {
+	modifiedResponse := response
+	modifiedErr := err
+	for _, hook := range c.config.AfterRequest {
+		modifiedResponse, modifiedErr = hook(ctx, modifiedResponse, modifiedErr)
 	}
-}
-
-// WithDefaultModel sets the default model to use for requests if not specified in AskOptions.
-func WithDefaultModel(model string) ClientOption {
-	return func(c *Config) {
-		c.DefaultModel = model
-	}
-}
-
-// WithRequestOptions adds additional openai-go request options to the client.
-func WithRequestOptions(opts ...option.RequestOption) ClientOption {
-	return func(c *Config) {
-		c.RequestOptions = append(c.RequestOptions, opts...)
-	}
-}
-
-// WithLogLevel sets the minimum log level for the client's internal logging.
-func WithLogLevel(level slog.Level) ClientOption {
-	return func(c *Config) {
-		c.LogLevel = level
-	}
+	return modifiedResponse, modifiedErr
 }

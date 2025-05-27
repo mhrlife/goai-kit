@@ -1,5 +1,21 @@
 # GoAI Kit
 
+## Table of Contents
+
+- [GoAI Kit](#goai-kit)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [Usage](#usage)
+    - [Simple Example](#simple-example)
+    - [Using with Google Gemini (OpenAI-like API)](#using-with-google-gemini-openai-like-api)
+  - [Plugins](#plugins)
+    - [Langfuse Integration](#langfuse-integration)
+      - [Setup](#setup)
+      - [Enabling the Plugin](#enabling-the-plugin)
+      - [Usage Scenarios](#usage-scenarios)
+  - [JSON Schema Tags](#json-schema-tags)
+  - [Compatibility](#compatibility)
+
 Tired of general AI frameworks trying to do everything, I just wanted a simple way to communicate with LLMs. So, I built this.
 
 This project aims to satisfy the basic needs for interacting with LLMs, focusing on simplicity and direct communication rather than complex abstractions or "magic".
@@ -13,6 +29,8 @@ go get github.com/mhrlife/goai-kit
 ```
 
 ## Usage
+
+### Simple Example
 
 Here's a simple example demonstrating how to use `goai-kit` to ask an LLM a question and receive a JSON response:
 
@@ -117,6 +135,120 @@ func main() {
 ```
 
 Remember to set the `OPENAI_API_KEY` environment variable or provide it via `goaikit.WithAPIKey`.
+
+## Plugins
+
+GoAI Kit supports plugins to extend its functionality.
+
+### Langfuse Integration
+
+You can integrate `goai-kit` with [Langfuse](https://langfuse.com/) for observability and tracing of your LLM interactions.
+
+#### Setup
+
+1.  Ensure you have a Langfuse account (cloud or self-hosted).
+2.  Set the following environment variables:
+    ```bash
+    LANGFUSE_SECRET_KEY="your_secret_key"
+    LANGFUSE_PUBLIC_KEY="your_public_key"
+    LANGFUSE_HOST="https://cloud.langfuse.com" # Or your self-hosted Langfuse URL
+    ```
+
+#### Enabling the Plugin
+
+To enable Langfuse integration, initialize the Langfuse client and pass it to `goai-kit` using the `WithPlugin` option:
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"log/slog"
+	"os"
+
+	"github.com/henomis/langfuse-go"
+	"github.com/joho/godotenv"
+	"github.com/mhrlife/goai-kit"
+)
+
+type MyOutput struct {
+	Message string `json:"message"`
+}
+
+func main() {
+	godotenv.Load()
+
+	// Initialize Langfuse client
+	lf := langfuse.New(context.Background())
+	// Ensure to flush Langfuse events before your application exits
+	defer lf.Flush(context.Background())
+
+	// Create a new goai-kit client with the Langfuse plugin
+	client := goaikit.NewClient(
+		goaikit.WithDefaultModel("gpt-4o-mini"),
+		goaikit.WithLogLevel(slog.LevelDebug),
+		goaikit.WithPlugin(goaikit.LangfusePlugin(lf)), // Enable Langfuse
+	)
+
+	// ... rest of your code
+}
+```
+
+#### Usage Scenarios
+
+**1. Automatic Tracing for Each `Ask` Call**
+
+Once the Langfuse plugin is enabled, every call to `goaikit.Ask` will automatically create a new trace (if one isn't already in the context) and a generation observation in Langfuse.
+
+```go
+	// (Assuming client is initialized with Langfuse plugin as shown above)
+	output, err := goaikit.Ask[MyOutput](context.Background(), client,
+		goaikit.WithPrompt("Tell me a short joke."),
+	)
+	if err != nil {
+		log.Fatalf("Error asking LLM: %v", err)
+	}
+	fmt.Printf("Joke: %s\n", output.Message)
+	// This call will automatically appear as a trace and generation in Langfuse.
+```
+
+**2. Grouping Multiple `Ask` Calls under a Single Trace with `WithTrace`**
+
+If you want to group multiple related `Ask` calls under a single Langfuse trace, you can use the `goaikit.WithTrace` function. You can also customize the name of individual LLM calls (generations) within this trace using `goaikit.WithSpanName`.
+Note: You'll need to import `github.com/henomis/langfuse-go/model` for `model.Trace`.
+
+```go
+	// (Assuming client is initialized with Langfuse plugin as shown above)
+
+	type QuestionResponse struct {
+		Answer string `json:"answer"`
+	}
+
+	_, err := goaikit.WithTrace[QuestionResponse](context.Background(), client, &model.Trace{Name: "MyCustomTrace"}, func(ctx context.Context) (*QuestionResponse, error) {
+		// First call, part of "MyCustomTrace"
+		_, err := goaikit.Ask[MyOutput](ctx, client,
+			goaikit.WithPrompt("What is the capital of France?"),
+			goaikit.WithSpanName("AskCapital"), // Custom name for this generation in Langfuse
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to ask capital: %w", err)
+		}
+
+		// Second call, also part of "MyCustomTrace"
+		return goaikit.Ask[QuestionResponse](ctx, client,
+			goaikit.WithPrompt("What is its population?"),
+			goaikit.WithSpanName("AskPopulation"), // Custom name for this generation
+		)
+	})
+
+	if err != nil {
+		log.Fatalf("Error in traced operations: %v", err)
+	}
+	// Both Ask calls will be logged under the "MyCustomTrace" in Langfuse,
+	// with individual generations named "AskCapital" and "AskPopulation".
+```
 
 ## JSON Schema Tags
 

@@ -2,12 +2,12 @@ package goaikit
 
 import (
 	"context"
-	"fmt"
+	"github.com/henomis/langfuse-go"
+	"github.com/henomis/langfuse-go/model"
 	"github.com/stretchr/testify/require"
 	"log/slog"
 	"os"
 	"testing"
-	"time"
 )
 
 // Define a simple struct for the expected output
@@ -44,17 +44,40 @@ func TestGoogleGeminiOpenAI(t *testing.T) {
 }
 
 func TestOpenRouterProvider(t *testing.T) {
+	type Response struct {
+		IsPositive bool
+	}
+
+	lf := langfuse.New(context.Background())
+	defer lf.Flush(context.Background())
+
 	goaiClient := NewClient(
 		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
 		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
-		WithDefaultModel("meta-llama/llama-4-scout"),
+		WithDefaultModel("openai/gpt-4.1-nano"),
 		WithLogLevel(slog.LevelDebug),
+		WithPlugin(LangfusePlugin(lf)),
 	)
 
-	out, err := Ask[TestOutput](context.Background(), goaiClient,
-		WithPrompt("Say hello and give me a positive, between 10 and 20, number. now: %v", time.Now()),
-		WithOpenRouterProviders("groq"),
-	)
+	result, err := WithTrace[Response](context.Background(), goaiClient, &model.Trace{Name: "TestOpenRouterProvider"}, func(ctx context.Context) (*Response, error) {
+		out, err := Ask[TestOutput](ctx, goaiClient,
+			WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
+			WithSpanName("Ask for positive number"),
+		)
+		if err != nil {
+			return nil, err
+		}
 
-	fmt.Println(out, err)
+		t.Logf("Response: %+v", out)
+
+		return Ask[Response](
+			ctx,
+			goaiClient,
+			WithPrompt("is %v positive?", out.Number),
+			WithSpanName("Check if number is positive"),
+		)
+	})
+
+	require.NoError(t, err)
+	require.True(t, result.IsPositive)
 }
