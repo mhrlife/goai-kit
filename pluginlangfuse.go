@@ -45,7 +45,7 @@ func (p *langfusePlugin) beforeRequestHook(
 	ctx *Context,
 	params openai.ChatCompletionNewParams,
 ) openai.ChatCompletionNewParams {
-	ctx.logger.Debug("LangFuse beforeRequestHook called")
+	ctx.logger.Debug("LangFuse beforeRequestHook called", "has_client", p.lfClient != nil)
 	if p.lfClient == nil {
 		return params
 	}
