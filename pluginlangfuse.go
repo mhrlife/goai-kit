@@ -77,10 +77,9 @@ func (p *langfusePlugin) beforeRequestHook(
 
 	generation, err := p.lfClient.Generation(&model.Generation{
 		Name:      name,
-		Input:     params.Messages,
+		Input:     params,
 		Model:     params.Model,
 		TraceID:   traceID,
-		Metadata:  params.Metadata,
 		StartTime: openai.Ptr(time.Now()),
 	}, nil)
 	if err != nil {
