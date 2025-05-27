@@ -51,6 +51,8 @@ func (p *langfusePlugin) beforeRequestHook(
 
 	traceID, ok := ctx.Value(langfuseTraceIDKey{}).(string)
 
+	ctx.logger.Debug("LangFuse beforeRequestHook called", "trace_id", traceID)
+
 	if !ok || traceID == "" {
 		trace, traceErr := p.lfClient.Trace(&model.Trace{
 			Name:  "goaikit-openai-trace",
@@ -96,10 +98,14 @@ func (p *langfusePlugin) beforeRequestHook(
 		return params
 	}
 
+	ctx.logger.Debug("LangFuse Generation created",
+		"generation_id", generation.ID,
+		"trace_id", generation.TraceID,
+		"start_time", generation.StartTime,
+	)
+
 	// Add the generation observation to the context so the after hook can access it
-	if generation != nil {
-		ctx.WithValue(langfuseGenerationKey{}, generation)
-	}
+	ctx.WithValue(langfuseGenerationKey{}, generation)
 
 	return params
 }
