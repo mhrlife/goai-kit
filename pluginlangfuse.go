@@ -45,13 +45,12 @@ func (p *langfusePlugin) beforeRequestHook(
 	ctx *Context,
 	params openai.ChatCompletionNewParams,
 ) openai.ChatCompletionNewParams {
+	ctx.logger.Debug("LangFuse beforeRequestHook called")
 	if p.lfClient == nil {
 		return params
 	}
 
 	traceID, ok := ctx.Value(langfuseTraceIDKey{}).(string)
-
-	ctx.logger.Debug("LangFuse beforeRequestHook called", "trace_id", traceID)
 
 	if !ok || traceID == "" {
 		trace, traceErr := p.lfClient.Trace(&model.Trace{
