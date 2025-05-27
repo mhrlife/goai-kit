@@ -59,7 +59,10 @@ func TestOpenRouterProvider(t *testing.T) {
 		WithPlugin(LangfusePlugin(lf)),
 	)
 
-	result, err := WithTrace[Response](context.Background(), goaiClient, &model.Trace{Name: "TestOpenRouterProvider"}, func(ctx context.Context) (*Response, error) {
+	result, err := WithTrace[Response](context.Background(), goaiClient, &model.Trace{
+		Name:  "TestOpenRouterProvider",
+		Input: "Is positive?",
+	}, func(ctx context.Context) (*Response, error) {
 		out, err := Ask[TestOutput](ctx, goaiClient,
 			WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
 			WithSpanName("Ask for positive number"),
@@ -76,7 +79,9 @@ func TestOpenRouterProvider(t *testing.T) {
 			WithPrompt("is %v positive?", out.Number),
 			WithSpanName("Check if number is positive"),
 		)
-	})
+	}, WithTraceOutput(func(t *Response) any {
+		return t.IsPositive
+	}))
 
 	require.NoError(t, err)
 	require.True(t, result.IsPositive)

@@ -153,6 +153,7 @@ func WithTrace[T any](
 	c *Client,
 	trace *model.Trace,
 	call func(ctx context.Context) (*T, error),
+	modifier ...TraceModifier[T],
 ) (*T, error) {
 	if c.config.lf == nil {
 		c.logger.Debug("LangFuse client not configured, skipping trace")
@@ -173,7 +174,45 @@ func WithTrace[T any](
 
 	c.logger.Debug("Trace created", "trace_id", trace.ID)
 
-	return call(ctx)
+	response, err := call(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, t := range modifier {
+		t(trace, response)
+	}
+
+	fmt.Println(trace.Output)
+
+	if trace.Output == nil {
+		trace.Output = response
+	}
+
+	if _, err := c.config.lf.Trace(trace); err != nil {
+		c.logger.Warn("LangFuse Error: Failed to create Trace",
+			"error", err,
+			"trace_id", trace.ID,
+		)
+	}
+
+	return response, nil
+}
+
+type TraceModifier[T any] func(t *model.Trace, resp *T)
+
+func WithTraceOutput[T any](f func(t *T) any) TraceModifier[T] {
+	return func(t *model.Trace, resp *T) {
+		if resp == nil {
+			return
+		}
+
+		output := f(resp)
+
+		if output != nil {
+			t.Output = output
+		}
+	}
 }
 
 func WithSpanName(name string) AskOption {
