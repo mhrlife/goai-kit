@@ -2,6 +2,7 @@ package goaikit
 
 import (
 	"context"
+	_ "embed"
 	"github.com/henomis/langfuse-go"
 	"github.com/henomis/langfuse-go/model"
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,29 @@ func TestOpenRouterProvider(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, result.IsPositive)
+}
+
+//go:embed fixture/test.pdf
+var testPDF []byte
+
+func TestWithFile(t *testing.T) {
+	type Output struct {
+		PDFContent string `jsonschema_description:"Exact content of the PDF file, with no extra explaination." json:"pdf_content"`
+	}
+
+	goaiClient := NewClient(
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[Output](context.Background(), goaiClient,
+		WithPrompt("What is the content of the file.pdf?"),
+		WithFile(FilePDF("file.pdf", testPDF)),
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, out.PDFContent, "Hello World!")
+
 }

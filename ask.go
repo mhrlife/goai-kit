@@ -29,6 +29,7 @@ type AskConfig struct {
 	User             string
 	Seed             *int64 // Pointer
 	ExtraFields      map[string]any
+	Files            []File
 
 	// AskSpecificRequestOptions are openai-go lfClient options specific to this Ask call.
 	AskSpecificRequestOptions []option.RequestOption
@@ -153,5 +154,18 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 	}
 	if cfg.ExtraFields != nil {
 		params.SetExtraFields(cfg.ExtraFields)
+	}
+	if cfg.Files != nil {
+		files := make([]openai.ChatCompletionContentPartUnionParam, 0, len(cfg.Files))
+		for _, file := range cfg.Files {
+			files = append(files,
+				openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
+					FileData: param.NewOpt(file.DataURI),
+					Filename: param.NewOpt(file.Name),
+				}),
+			)
+		}
+
+		params.Messages = append(params.Messages, openai.UserMessage(files))
 	}
 }

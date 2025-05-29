@@ -17,6 +17,16 @@ func WithPrompt(prompt string, formatting ...any) AskOption {
 	return func(ac *AskConfig) { ac.Prompt = prompt }
 }
 
+func WithFile(file File) AskOption {
+	return func(ac *AskConfig) {
+		if len(ac.Files) == 0 {
+			ac.Files = make([]File, 0)
+		}
+
+		ac.Files = append(ac.Files, file)
+	}
+}
+
 // WithModel sets the model for the Ask request.
 func WithModel(model string) AskOption {
 	return func(ac *AskConfig) { ac.Model = model }
