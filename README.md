@@ -8,6 +8,7 @@
   - [Usage](#usage)
     - [Simple Example](#simple-example)
     - [Using with Google Gemini (OpenAI-like API)](#using-with-google-gemini-openai-like-api)
+    - [Working with Files](#working-with-files)
   - [Plugins](#plugins)
     - [Langfuse Integration](#langfuse-integration)
       - [Setup](#setup)
@@ -133,6 +134,64 @@ func main() {
 	fmt.Printf("Received number: %d\n", out.Number)
 }
 ```
+
+### Working with Files
+
+You can send files, such as PDFs, along with your prompts. This is useful for tasks like document analysis or summarization.
+
+Use the `goaikit.WithFile()` option and the `goaikit.FilePDF()` helper function to prepare your file.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"io/ioutil" // Required for reading the file
+
+	"github.com/joho/godotenv"
+	"github.com/mhrlife/goai-kit"
+	"log/slog"
+)
+
+// Define a struct for the expected JSON output
+type FileAnalysisOutput struct {
+	Summary string `json:"summary" jsonschema_description:"A brief summary of the provided PDF content."`
+}
+
+func main() {
+	godotenv.Load()
+
+	// Read the PDF file content
+	pdfBytes, err := ioutil.ReadFile("path/to/your/document.pdf")
+	if err != nil {
+		log.Fatalf("Failed to read PDF file: %v", err)
+	}
+
+	client := goaikit.NewClient(
+		// Configure your client (API key, model, etc.)
+		// For models that support file inputs, e.g., some OpenRouter models or newer OpenAI models
+		goaikit.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")), // Example, use your preferred provider
+		goaikit.WithBaseURL(os.Getenv("OPENROUTER_API_BASE")), // Example
+		goaikit.WithDefaultModel("google/gemini-2.5-flash-preview-05-20"), // Example model supporting file input
+		goaikit.WithLogLevel(slog.LevelDebug),
+	)
+
+	// Make the Ask request with the file
+	output, err := goaikit.Ask[FileAnalysisOutput](context.Background(), client,
+		goaikit.WithPrompt("Summarize the content of the attached PDF file."),
+		goaikit.WithFile(goaikit.FilePDF("document.pdf", pdfBytes)),
+	)
+	if err != nil {
+		log.Fatalf("Error asking LLM with file: %v", err)
+	}
+
+	fmt.Printf("PDF Summary: %s\n", output.Summary)
+}
+```
+**Note:** Ensure the LLM model you are using supports file inputs (often referred to as multimodal capabilities). The `FilePDF` function creates a data URI for the PDF content.
 
 Remember to set the `OPENAI_API_KEY` environment variable or provide it via `goaikit.WithAPIKey`.
 
