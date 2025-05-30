@@ -112,3 +112,27 @@ func TestWithFile(t *testing.T) {
 	require.Equal(t, out.PDFContent, "Hello World!")
 
 }
+
+//go:embed fixture/img.png
+var image []byte
+
+func TestWithPNG(t *testing.T) {
+	type Output struct {
+		NumberOfChoices int `jsonschema_description:"Number of choices in the image." json:"number_of_choices"`
+	}
+
+	goaiClient := NewClient(
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithDefaultModel("openai/gpt-4.1-nano"),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[Output](context.Background(), goaiClient,
+		WithPrompt("What is the number of choices in the image?"),
+		WithFile(FilePNG("image.png", image)),
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, out.NumberOfChoices, 4)
+}

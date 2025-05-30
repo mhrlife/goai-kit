@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
+	"strings"
 )
 
 // AskOption is a function that configures AskConfig.
@@ -43,7 +44,7 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 	var output Output
 
 	cfg := AskConfig{
-		Retries:                   3, // Default retries
+		Retries:                   3,
 		AskSpecificRequestOptions: make([]option.RequestOption, 0),
 	}
 
@@ -157,15 +158,30 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 	}
 	if cfg.Files != nil {
 		files := make([]openai.ChatCompletionContentPartUnionParam, 0, len(cfg.Files))
+		images := make([]openai.ChatCompletionContentPartUnionParam, 0, len(cfg.Files))
+
 		for _, file := range cfg.Files {
-			files = append(files,
-				openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
-					FileData: param.NewOpt(file.DataURI),
-					Filename: param.NewOpt(file.Name),
-				}),
-			)
+			if strings.Contains(file.DataURI, "/pdf") {
+				files = append(files,
+					openai.FileContentPart(openai.ChatCompletionContentPartFileFileParam{
+						FileData: param.NewOpt(file.DataURI),
+						Filename: param.NewOpt(file.Name),
+					}),
+				)
+			}
+
+			if strings.Contains(file.DataURI, "image/") {
+				images = append(images,
+					openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
+						URL:    file.DataURI,
+						Detail: file.Name,
+					}),
+				)
+			}
+
 		}
 
 		params.Messages = append(params.Messages, openai.UserMessage(files))
+		params.Messages = append(params.Messages, openai.UserMessage(images))
 	}
 }
