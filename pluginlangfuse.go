@@ -183,8 +183,6 @@ func WithTrace[T any](
 		t(trace, response)
 	}
 
-	fmt.Println(trace.Output)
-
 	if trace.Output == nil {
 		trace.Output = response
 	}
