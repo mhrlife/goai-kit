@@ -124,7 +124,7 @@ func TestWithPNG(t *testing.T) {
 	goaiClient := NewClient(
 		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
 		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
-		WithDefaultModel("openai/gpt-4.1-nano"),
+		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
 		WithLogLevel(slog.LevelDebug),
 	)
 

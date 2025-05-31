@@ -174,7 +174,7 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 				images = append(images,
 					openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
 						URL:    file.DataURI,
-						Detail: file.Name,
+						Detail: "high",
 					}),
 				)
 			}
@@ -183,5 +183,12 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 
 		params.Messages = append(params.Messages, openai.UserMessage(files))
 		params.Messages = append(params.Messages, openai.UserMessage(images))
+
+		// move the first message to the end
+		if len(params.Messages) > 1 {
+			firstMessage := params.Messages[0]
+			params.Messages = params.Messages[1:]
+			params.Messages = append(params.Messages, firstMessage)
+		}
 	}
 }
