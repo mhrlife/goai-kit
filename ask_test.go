@@ -3,6 +3,7 @@ package goaikit
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"github.com/henomis/langfuse-go"
 	"github.com/henomis/langfuse-go/model"
 	"github.com/stretchr/testify/require"
@@ -135,4 +136,26 @@ func TestWithPNG(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, out.NumberOfChoices, 4)
+}
+
+func TestWithPNGMistralOCR(t *testing.T) {
+	type Output struct {
+		ExactContent string `jsonschema_description:"Exact content of the PDF, with no extra explanation." json:"exact_content"`
+	}
+
+	goaiClient := NewClient(
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithDefaultModel("openai/gpt-4.1-nano"),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[Output](context.Background(), goaiClient,
+		WithPrompt("What is the exact content?"),
+		WithFile(FilePNG("file.png", image)),
+		WithOpenRouterFileParser(ParserEngineMistralOCR),
+	)
+
+	require.NoError(t, err)
+	fmt.Println(out.ExactContent)
 }

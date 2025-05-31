@@ -105,6 +105,32 @@ func WithOpenRouterProviders(providers ...string) AskOption {
 	}
 }
 
+type ParserEngine string
+
+var (
+	ParserEngineMistralOCR ParserEngine = "mistral-ocr"
+)
+
+func WithOpenRouterFileParser(parser ParserEngine) AskOption {
+	return func(config *AskConfig) {
+		if config.ExtraFields == nil {
+			config.ExtraFields = make(map[string]any)
+		}
+
+		config.ExtraFields["plugins"] = []any{
+			map[string]any{
+				"id": "file-parser",
+				"image": map[string]any{
+					"engine": parser,
+				},
+				"pdf": map[string]any{
+					"engine": parser,
+				},
+			},
+		}
+	}
+}
+
 /// ======= CLIENT OPTIONS ======= ///
 
 // WithAPIKey sets the API key for the lfClient.
