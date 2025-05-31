@@ -59,10 +59,6 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 		opt(&cfg)
 	}
 
-	if cfg.Prompt == "" {
-		return nil, ErrBadOptions
-	}
-
 	if cfg.Model == "" {
 		cfg.Model = client.config.DefaultModel
 	}
