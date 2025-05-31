@@ -21,6 +21,7 @@ var ErrBadOptions = errors.New("bad options")
 // AskConfig holds all configurable parameters for an Ask request.
 type AskConfig struct {
 	Prompt           string
+	System           string
 	Model            string
 	Temperature      *float64 // Pointer to distinguish between not set and set to 0.0
 	MaxTokens        *int64   // Pointer to distinguish between not set and set to 0
@@ -66,12 +67,16 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 		cfg.Model = client.config.DefaultModel
 	}
 
-	// Prepare parameters for the openai-go call
+	var messages []openai.ChatCompletionMessageParamUnion
+	if cfg.System != "" {
+		messages = append(messages, openai.SystemMessage(cfg.System))
+	}
+
+	messages = append(messages, openai.UserMessage(cfg.Prompt))
+
 	params := openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.UserMessage(cfg.Prompt),
-		},
-		Model: cfg.Model,
+		Messages: messages,
+		Model:    cfg.Model,
 	}
 
 	// Apply AskConfig options to the parameters
@@ -183,12 +188,5 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 
 		params.Messages = append(params.Messages, openai.UserMessage(files))
 		params.Messages = append(params.Messages, openai.UserMessage(images))
-
-		// move the first message to the end
-		if len(params.Messages) > 1 {
-			firstMessage := params.Messages[0]
-			params.Messages = params.Messages[1:]
-			params.Messages = append(params.Messages, firstMessage)
-		}
 	}
 }
