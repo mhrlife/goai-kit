@@ -131,7 +131,7 @@ func TestWithPNG(t *testing.T) {
 
 	out, err := Ask[Output](context.Background(), goaiClient,
 		WithPrompt("What is the number of choices in the image?"),
-		WithFile(FilePNG("image.png", image)),
+		WithFile(FileImage("image.png", image)),
 	)
 
 	require.NoError(t, err)
@@ -152,7 +152,7 @@ func TestWithPNGMistralOCR(t *testing.T) {
 
 	out, err := Ask[Output](context.Background(), goaiClient,
 		WithPrompt("What is the exact content?"),
-		WithFile(FilePNG("file.png", image)),
+		WithFile(FileImage("file.png", image)),
 		WithOpenRouterFileParser(ParserEngineMistralOCR),
 	)
 
@@ -170,7 +170,7 @@ func TestReturnString(t *testing.T) {
 
 	out, err := Ask[string](context.Background(), goaiClient,
 		WithPrompt("What is the exact content?"),
-		WithFile(FilePNG("file.png", image)),
+		WithFile(FileImage("file.png", image)),
 		WithOpenRouterFileParser(ParserEngineMistralOCR),
 	)
 
@@ -191,7 +191,7 @@ func TestGeminiSegmentation(t *testing.T) {
 
 	out, err := Ask[string](context.Background(), goaiClient,
 		WithPrompt("Give the segmentation masks for the Watermelon. Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key \"box_2d\", the segmentation mask in key \"mask\", and the text label in the key \"label\". Use descriptive labels."),
-		WithFile(FilePNG("file.png", fruitsImage)),
+		WithFile(FileImage("file.png", fruitsImage)),
 		WithTemperature(0.0),
 		WithRetries(1),
 		WithMaxTokens(4096),

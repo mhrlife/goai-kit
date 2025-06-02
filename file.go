@@ -19,11 +19,10 @@ func FilePDF(name string, fileContent []byte) File {
 	}
 }
 
-func FilePNG(name string, fileContent []byte) File {
+func FileImage(mime string, fileContent []byte) File {
 	base64Content := base64.StdEncoding.EncodeToString(fileContent)
-
 	return File{
-		DataURI: fmt.Sprintf("data:image/png;base64,%s", base64Content),
-		Name:    name,
+		DataURI: fmt.Sprintf("data:%s;base64,%s", mime, base64Content),
+		Name:    "",
 	}
 }
