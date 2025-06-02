@@ -25,13 +25,13 @@ func WithSystem(system string, formatting ...any) AskOption {
 	return func(ac *AskConfig) { ac.System = system }
 }
 
-func WithFile(file File) AskOption {
+func WithFile(file ...File) AskOption {
 	return func(ac *AskConfig) {
 		if len(ac.Files) == 0 {
 			ac.Files = make([]File, 0)
 		}
 
-		ac.Files = append(ac.Files, file)
+		ac.Files = append(ac.Files, file...)
 	}
 }
 
