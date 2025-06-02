@@ -2,11 +2,10 @@ package goaikit
 
 import (
 	"bytes"
+	"github.com/openai/openai-go/option"
 	"io"
 	"log/slog"
 	"net/http"
-
-	"github.com/openai/openai-go/option"
 )
 
 // LoggingMiddleware creates a middleware function that logs OpenAI API requests and responses.

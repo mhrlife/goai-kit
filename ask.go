@@ -78,15 +78,19 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 	// Apply AskConfig options to the parameters
 	applyAskConfig(&cfg, &params)
 
-	schema := InferJSONSchema(output)
-	params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
-		OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
-			JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
-				Strict: param.NewOpt(true),
-				Name:   "json_schema_response",
-				Schema: schema,
+	switch any(output).(type) {
+	case string:
+	default:
+		schema := InferJSONSchema(output)
+		params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+			OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+				JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+					Strict: param.NewOpt(true),
+					Name:   "json_schema_response",
+					Schema: schema,
+				},
 			},
-		},
+		}
 	}
 
 	client.applyBeforeRequestHooks(reqContext, params)
@@ -122,6 +126,11 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 
 	if len(chatCompletion.Choices) == 0 {
 		return nil, fmt.Errorf("OpenAI response contained no choices")
+	}
+
+	switch any(output).(type) {
+	case string:
+		return any(&chatCompletion.Choices[0].Message.Content).(*Output), nil
 	}
 
 	err = json.Unmarshal([]byte(chatCompletion.Choices[0].Message.Content), &output)
@@ -174,15 +183,20 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 			if strings.Contains(file.DataURI, "image/") {
 				images = append(images,
 					openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{
-						URL:    file.DataURI,
-						Detail: "high",
+						URL: file.DataURI,
+						//Detail: "high",
 					}),
 				)
 			}
 
 		}
 
-		params.Messages = append(params.Messages, openai.UserMessage(files))
-		params.Messages = append(params.Messages, openai.UserMessage(images))
+		if len(files) > 0 {
+			params.Messages = append([]openai.ChatCompletionMessageParamUnion{openai.UserMessage(files)}, params.Messages...)
+		}
+
+		if len(images) > 0 {
+			params.Messages = append([]openai.ChatCompletionMessageParamUnion{openai.UserMessage(images)}, params.Messages...)
+		}
 	}
 }

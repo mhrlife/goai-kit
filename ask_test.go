@@ -159,3 +159,45 @@ func TestWithPNGMistralOCR(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println(out.ExactContent)
 }
+
+func TestReturnString(t *testing.T) {
+	goaiClient := NewClient(
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithDefaultModel("openai/gpt-4.1-nano"),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[string](context.Background(), goaiClient,
+		WithPrompt("What is the exact content?"),
+		WithFile(FilePNG("file.png", image)),
+		WithOpenRouterFileParser(ParserEngineMistralOCR),
+	)
+
+	require.NoError(t, err)
+	fmt.Println(*out)
+}
+
+//go:embed fixture/fruits.png
+var fruitsImage []byte
+
+func TestGeminiSegmentation(t *testing.T) {
+	goaiClient := NewClient(
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[string](context.Background(), goaiClient,
+		WithPrompt("Give the segmentation masks for the Watermelon. Output a JSON list of segmentation masks where each entry contains the 2D bounding box in the key \"box_2d\", the segmentation mask in key \"mask\", and the text label in the key \"label\". Use descriptive labels."),
+		WithFile(FilePNG("file.png", fruitsImage)),
+		WithTemperature(0.0),
+		WithRetries(1),
+		WithMaxTokens(4096),
+		WithOpenRouterFileParser(ParserEngineNative),
+	)
+
+	require.NoError(t, err)
+	fmt.Println(*out)
+}

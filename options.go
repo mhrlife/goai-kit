@@ -109,6 +109,7 @@ type ParserEngine string
 
 var (
 	ParserEngineMistralOCR ParserEngine = "mistral-ocr"
+	ParserEngineNative     ParserEngine = "native"
 )
 
 func WithOpenRouterFileParser(parser ParserEngine) AskOption {
