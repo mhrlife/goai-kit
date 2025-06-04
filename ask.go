@@ -10,8 +10,8 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
-	"os"
 	"strings"
+	"sync"
 )
 
 // AskOption is a function that configures AskConfig.
@@ -112,7 +112,7 @@ func ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 		chatCompletion = resp
 		return nil
 	}
-
+aa:
 	err := retry.Do(
 		apiCallFunc,
 		retry.Attempts(cfg.Retries),
@@ -135,23 +135,55 @@ func ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 		return nil, fmt.Errorf("OpenAI response contained no choices")
 	}
 
+	params.Messages = append(params.Messages, chatCompletion.Choices[0].Message.ToParam())
+
 	toolCalls := chatCompletion.Choices[0].Message.ToolCalls
 
 	if len(toolCalls) > 0 {
-		for _, call := range toolCalls {
-			toolContext := &ToolContext{
-				Client: client,
-			}
+		client.logger.Debug("got tool calls", "count", len(toolCalls))
+		var wg sync.WaitGroup
+		var lock sync.Mutex
 
-			result, err := cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
-			if err != nil {
-				return nil, fmt.Errorf("failed to run tool %s: %w", call.Function.Name, err)
-			}
-			fmt.Println(call.Function.Arguments)
-			fmt.Println(call.Function.Name)
-			fmt.Println(result)
-			os.Exit(0)
+		for _, call := range toolCalls {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+				toolContext := &ToolContext{
+					Client: client,
+				}
+
+				client.logger.Debug("Processing tool call",
+					"tool", call.Function.Name,
+					"arguments", call.Function.Arguments,
+				)
+
+				result, err := cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
+				if err != nil {
+					client.logger.Error("Tool call failed",
+						"tool", call.Function.Name,
+						"error", err.Error(),
+						"arguments", call.Function.Arguments,
+					)
+
+					return
+				}
+
+				client.logger.Debug("Tool call result",
+					"tool", call.Function.Name,
+					"result", fmt.Sprintf("%v", result),
+				)
+
+				lock.Lock()
+				defer lock.Unlock()
+
+				params.Messages = append(params.Messages, openai.ToolMessage[string](fmt.Sprint(result), call.ID))
+			}()
 		}
+
+		wg.Wait()
+
+		goto aa
 	}
 
 	switch any(output).(type) {
@@ -243,5 +275,6 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 		}
 
 		params.Tools = toolParams
+		params.ParallelToolCalls = param.NewOpt(true)
 	}
 }

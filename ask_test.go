@@ -206,9 +206,14 @@ func TestGeminiSegmentation(t *testing.T) {
 type CityID struct {
 	DisplayName string
 	ActualID    string
+	AnotherID   string
 }
 
 type CityIDSearchArgs struct {
+	Query string `jsonschema_description:"The name of the city to search for." json:"query"`
+}
+
+type AnotherIDSearchArgs struct {
 	Query string `jsonschema_description:"The name of the city to search for." json:"query"`
 }
 
@@ -220,9 +225,9 @@ func TestWithTool(t *testing.T) {
 		WithLogLevel(slog.LevelDebug),
 	)
 
-	out, err := Ask[TestOutput](context.Background(), goaiClient,
+	out, err := Ask[CityID](context.Background(), goaiClient,
 		WithSystem(`You are an agent that must find the city the user is looking for.
-You can call the "get_city_id" tool to get the ID of a city based on its names, that is provided in the chat.`),
+You can call the "get_city_id" tool to get the ID and "another" ID of a city based on its names, that is provided in the chat.`),
 		WithPrompt("Ads of Jamshideh"),
 		WithTool(&Tool[CityIDSearchArgs]{
 			Name:        "Get City ID",
@@ -233,8 +238,18 @@ You can call the "get_city_id" tool to get the ID of a city based on its names, 
 				return "J-17", nil
 			},
 		}),
+		WithTool(&Tool[AnotherIDSearchArgs]{
+			Name:        "Get Another ID",
+			Description: "Get another ID of a city based on its name.",
+			Runner: func(ctx *ToolContext, args AnotherIDSearchArgs) (any, error) {
+				require.Equal(t, "jamshideh", strings.ToLower(args.Query))
+
+				return "ANOTHER-17", nil
+			},
+		}),
 	)
 
 	require.NoError(t, err)
-	require.NotZero(t, out.Number)
+	require.Equal(t, out.ActualID, "J-17")
+	require.Equal(t, out.AnotherID, "ANOTHER-17")
 }
