@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -200,4 +201,40 @@ func TestGeminiSegmentation(t *testing.T) {
 
 	require.NoError(t, err)
 	fmt.Println(*out)
+}
+
+type CityID struct {
+	DisplayName string
+	ActualID    string
+}
+
+type CityIDSearchArgs struct {
+	Query string `jsonschema_description:"The name of the city to search for." json:"query"`
+}
+
+func TestWithTool(t *testing.T) {
+	goaiClient := NewClient(
+		WithDefaultModel("gpt-4.1-mini"),
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[TestOutput](context.Background(), goaiClient,
+		WithSystem(`You are an agent that must find the city the user is looking for.
+You can call the "get_city_id" tool to get the ID of a city based on its names, that is provided in the chat.`),
+		WithPrompt("Ads of Jamshideh"),
+		WithTool(&Tool[CityIDSearchArgs]{
+			Name:        "Get City ID",
+			Description: "Get the ID of a city based on its name.",
+			Runner: func(ctx *ToolContext, args CityIDSearchArgs) (any, error) {
+				require.Equal(t, "jamshideh", strings.ToLower(args.Query))
+
+				return "J-17", nil
+			},
+		}),
+	)
+
+	require.NoError(t, err)
+	require.NotZero(t, out.Number)
 }

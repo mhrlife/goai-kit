@@ -17,6 +17,16 @@ func WithPrompt(prompt string, formatting ...any) AskOption {
 	return func(ac *AskConfig) { ac.Prompt = prompt }
 }
 
+func WithTool[T any](Tool *Tool[T]) AskOption {
+	return func(ac *AskConfig) {
+		if len(ac.Tools) == 0 {
+			ac.Tools = make(map[string]AITool)
+		}
+
+		ac.Tools[Tool.ToolID()] = Tool
+	}
+}
+
 func WithSystem(system string, formatting ...any) AskOption {
 	if len(formatting) > 0 {
 		system = fmt.Sprintf(system, formatting...)

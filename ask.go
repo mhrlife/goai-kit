@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
+	"os"
 	"strings"
 )
 
@@ -33,6 +34,8 @@ type AskConfig struct {
 	ExtraFields      map[string]any
 	Files            []File
 
+	Tools map[string]AITool // pass a Tool[ToolArgs any]
+
 	// AskSpecificRequestOptions are openai-go lfClient options specific to this Ask call.
 	AskSpecificRequestOptions []option.RequestOption
 	Retries                   uint // Number of retries for the request
@@ -42,6 +45,10 @@ type AskConfig struct {
 }
 
 func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) (*Output, error) {
+	return ask[Output](ctx, client, askOpts...)
+}
+
+func ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) (*Output, error) {
 	var output Output
 
 	cfg := AskConfig{
@@ -128,6 +135,25 @@ func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) 
 		return nil, fmt.Errorf("OpenAI response contained no choices")
 	}
 
+	toolCalls := chatCompletion.Choices[0].Message.ToolCalls
+
+	if len(toolCalls) > 0 {
+		for _, call := range toolCalls {
+			toolContext := &ToolContext{
+				Client: client,
+			}
+
+			result, err := cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
+			if err != nil {
+				return nil, fmt.Errorf("failed to run tool %s: %w", call.Function.Name, err)
+			}
+			fmt.Println(call.Function.Arguments)
+			fmt.Println(call.Function.Name)
+			fmt.Println(result)
+			os.Exit(0)
+		}
+	}
+
 	switch any(output).(type) {
 	case string:
 		return any(&chatCompletion.Choices[0].Message.Content).(*Output), nil
@@ -198,5 +224,24 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 		if len(images) > 0 {
 			params.Messages = append([]openai.ChatCompletionMessageParamUnion{openai.UserMessage(images)}, params.Messages...)
 		}
+	}
+
+	if len(cfg.Tools) > 0 {
+		toolParams := make([]openai.ChatCompletionToolParam, 0, len(cfg.Tools))
+
+		for _, tool := range cfg.Tools {
+			toolInfo := tool.ToolInfo()
+
+			toolParams = append(toolParams, openai.ChatCompletionToolParam{
+				Function: shared.FunctionDefinitionParam{
+					Name:        toolInfo.ID,
+					Strict:      param.NewOpt(true),
+					Description: param.NewOpt(toolInfo.Description),
+					Parameters:  toolInfo.JSONSchema,
+				},
+			})
+		}
+
+		params.Tools = toolParams
 	}
 }
