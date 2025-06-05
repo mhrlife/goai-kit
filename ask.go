@@ -174,10 +174,12 @@ aa:
 					"result", fmt.Sprintf("%v", result),
 				)
 
+				resultJson, _ := json.Marshal(result)
+
 				lock.Lock()
 				defer lock.Unlock()
 
-				params.Messages = append(params.Messages, openai.ToolMessage[string](fmt.Sprint(result), call.ID))
+				params.Messages = append(params.Messages, openai.ToolMessage[string](string(resultJson), call.ID))
 			}()
 		}
 
