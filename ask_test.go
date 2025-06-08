@@ -253,3 +253,39 @@ You can call the "get_city_id" tool to get the ID and "another" ID of a city bas
 	require.Equal(t, out.ActualID, "J-17")
 	require.Equal(t, out.AnotherID, "ANOTHER-17")
 }
+
+func TestWithToolGemini(t *testing.T) {
+	goaiClient := NewClient(
+		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[string](context.Background(), goaiClient,
+		WithSystem(`You are an agent that must find the city the user is looking for.
+You can call the "get_city_id" tool to get the ID and "another" ID of a city based on its names, that is provided in the chat.`),
+		WithPrompt("Ads of Jamshideh"),
+		WithTool(&Tool[CityIDSearchArgs]{
+			Name:        "Get City ID",
+			Description: "Get the ID of a city based on its name.",
+			Runner: func(ctx *ToolContext, args CityIDSearchArgs) (any, error) {
+				require.Equal(t, "jamshideh", strings.ToLower(args.Query))
+
+				return "J-17", nil
+			},
+		}),
+		WithTool(&Tool[AnotherIDSearchArgs]{
+			Name:        "Get Another ID",
+			Description: "Get another ID of a city based on its name.",
+			Runner: func(ctx *ToolContext, args AnotherIDSearchArgs) (any, error) {
+				require.Equal(t, "jamshideh", strings.ToLower(args.Query))
+
+				return "ANOTHER-17", nil
+			},
+		}),
+	)
+
+	require.NoError(t, err)
+	fmt.Println(*out)
+}

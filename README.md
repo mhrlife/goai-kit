@@ -1,318 +1,169 @@
 # GoAI Kit
 
-## Table of Contents
-
-- [GoAI Kit](#goai-kit)
-  - [Table of Contents](#table-of-contents)
-  - [Installation](#installation)
-  - [Usage](#usage)
-    - [Simple Example](#simple-example)
-    - [Using with Google Gemini (OpenAI-like API)](#using-with-google-gemini-openai-like-api)
-    - [Working with Files](#working-with-files)
-  - [Plugins](#plugins)
-    - [Langfuse Integration](#langfuse-integration)
-      - [Setup](#setup)
-      - [Enabling the Plugin](#enabling-the-plugin)
-      - [Usage Scenarios](#usage-scenarios)
-  - [JSON Schema Tags](#json-schema-tags)
-  - [Compatibility](#compatibility)
-
-Tired of general AI frameworks trying to do everything, I just wanted a simple way to communicate with LLMs. So, I built this.
-
-This project aims to satisfy the basic needs for interacting with LLMs, focusing on simplicity and direct communication rather than complex abstractions or "magic".
+A simple, no-magic Go library for interacting with OpenAI-compatible LLMs. Get structured JSON, plain text, or use tools with minimal boilerplate.
 
 ## Installation
-
-To add `goai-kit` to your Go project, run:
 
 ```bash
 go get github.com/mhrlife/goai-kit
 ```
 
-## Usage
+## Features
 
-### Simple Example
+### 1. Typed JSON Responses
 
-Here's a simple example demonstrating how to use `goai-kit` to ask an LLM a question and receive a JSON response:
+Define a Go struct, and `goai-kit` will handle prompting for JSON and unmarshaling the response. You can use `jsonschema` struct tags to guide the model's output.
 
 ```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-
-	"github.com/joho/godotenv" // Optional: for loading .env file
-	"github.com/mhrlife/goai-kit"
-	"log/slog"
-)
-
-// Define a struct for the expected JSON output, using jsonschema tags
+// Define your desired output structure
 type MyOutput struct {
-	Message string `json:"message" jsonschema:"description=A greeting message,example=hello"`
-	Value   int    `json:"value" jsonschema:"description=An integer value,required"`
+	Message string `json:"message" jsonschema:"description=A greeting message"`
+	Value   int    `json:"value" jsonschema:"required"`
 }
 
-func main() {
-	// Load environment variables (optional)
-	godotenv.Load()
+// Create a client
+client := goaikit.NewClient(goaikit.WithDefaultModel("gpt-4o-mini"))
 
-	// Create a new client
-	// API Key and Base URL can be set via OPENAI_API_KEY and OPENAI_API_BASE env vars
-	// or using functional options like goaikit.WithAPIKey("your-api-key")
-	client := goaikit.NewClient(
-		goaikit.WithDefaultModel("gpt-4o-mini"), // Set a default model
-		goaikit.WithLogLevel(slog.LevelDebug),   // Set logging level (optional)
-	)
-
-	// Make the Ask request
-	output, err := goaikit.Ask[MyOutput](context.Background(), client,
-		goaikit.WithPrompt("Generate a JSON object with a 'message' field saying 'hello' and a 'value' field with the number 42."),
-		// Example of setting other parameters:
-		// goaikit.WithTemperature(0.5),
-		// goaikit.WithMaxTokens(50),
-	)
-	if err != nil {
-		log.Fatalf("Error asking LLM: %v", err)
-	}
-
-	// Use the unmarshaled output
-	fmt.Printf("Received message: %s\n", output.Message)
-	fmt.Printf("Received value: %d\n", output.Value)
-}
-```
-
-### Using with Google Gemini (OpenAI-like API)
-
-You can also use `goai-kit` with other services that provide an OpenAI-compatible API, such as Google Gemini via their OpenAI endpoint.
-
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-
-	"github.com/joho/godotenv" // Optional: for loading .env file
-	"github.com/mhrlife/goai-kit"
-	"log/slog"
+// Get a structured response
+output, err := goaikit.Ask[MyOutput](context.Background(), client,
+    goaikit.WithPrompt("Say hello and give me the number 42."),
 )
 
-// Define a struct for the expected JSON output
-type GeminiOutput struct {
-	Greeting string `json:"greeting"`
-	Number   int    `json:"number"`
-}
-
-func main() {
-	// Load environment variables (optional)
-	godotenv.Load()
-
-	// Create a new client configured for Google Gemini's OpenAI endpoint
-	// Ensure GEMINI_API_KEY environment variable is set
-	client := goaikit.NewClient(
-		goaikit.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
-		goaikit.WithDefaultModel("gemini-2.0-flash-001"), // Use a Gemini model
-		goaikit.WithBaseURL("https://generativelanguage.googleapis.com/v1beta/openai/"), // Gemini's OpenAI endpoint
-		goaikit.WithLogLevel(slog.LevelDebug), // Set logging level (optional)
-	)
-
-	// Make the Ask request
-	out, err := goaikit.Ask[GeminiOutput](context.Background(), client,
-		goaikit.WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
-	)
-	if err != nil {
-		log.Fatalf("Error asking LLM: %v", err)
-	}
-
-	// Use the unmarshaled output
-	fmt.Printf("Received greeting: %s\n", out.Greeting)
-	fmt.Printf("Received number: %d\n", out.Number)
-}
+fmt.Println(output.Message, output.Value) // "Hello", 42
 ```
 
-### Working with Files
+### 2. Plain String Responses
 
-You can send files, such as PDFs, along with your prompts. This is useful for tasks like document analysis or summarization.
-
-Use the `goaikit.WithFile()` option and the `goaikit.FilePDF()` helper function to prepare your file.
+For simple text generation, just ask for a `string`.
 
 ```go
-package main
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"os"
-	"io/ioutil" // Required for reading the file
-
-	"github.com/joho/godotenv"
-	"github.com/mhrlife/goai-kit"
-	"log/slog"
+// Get a plain string response
+text, err := goaikit.Ask[string](context.Background(), client,
+    goaikit.WithPrompt("Tell me a short joke."),
 )
 
-// Define a struct for the expected JSON output
-type FileAnalysisOutput struct {
-	Summary string `json:"summary" jsonschema_description:"A brief summary of the provided PDF content."`
-}
-
-func main() {
-	godotenv.Load()
-
-	// Read the PDF file content
-	pdfBytes, err := ioutil.ReadFile("path/to/your/document.pdf")
-	if err != nil {
-		log.Fatalf("Failed to read PDF file: %v", err)
-	}
-
-	client := goaikit.NewClient(
-		// Configure your client (API key, model, etc.)
-		// For models that support file inputs, e.g., some OpenRouter models or newer OpenAI models
-		goaikit.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")), // Example, use your preferred provider
-		goaikit.WithBaseURL(os.Getenv("OPENROUTER_API_BASE")), // Example
-		goaikit.WithDefaultModel("google/gemini-2.5-flash-preview-05-20"), // Example model supporting file input
-		goaikit.WithLogLevel(slog.LevelDebug),
-	)
-
-	// Make the Ask request with the file
-	output, err := goaikit.Ask[FileAnalysisOutput](context.Background(), client,
-		goaikit.WithPrompt("Summarize the content of the attached PDF file."),
-		goaikit.WithFile(goaikit.FilePDF("document.pdf", pdfBytes)),
-	)
-	if err != nil {
-		log.Fatalf("Error asking LLM with file: %v", err)
-	}
-
-	fmt.Printf("PDF Summary: %s\n", output.Summary)
-}
+fmt.Println(*text)
 ```
-**Note:** Ensure the LLM model you are using supports file inputs (often referred to as multimodal capabilities). The `FilePDF` function creates a data URI for the PDF content.
 
-Remember to set the `OPENAI_API_KEY` environment variable or provide it via `goaikit.WithAPIKey`.
+### 3. Tool Calling (Function Calling)
 
-## Plugins
-
-GoAI Kit supports plugins to extend its functionality.
-
-### Langfuse Integration
-
-You can integrate `goai-kit` with [Langfuse](https://langfuse.com/) for observability and tracing of your LLM interactions.
-
-#### Setup
-
-1.  Ensure you have a Langfuse account (cloud or self-hosted).
-2.  Set the following environment variables:
-    ```bash
-    LANGFUSE_SECRET_KEY="your_secret_key"
-    LANGFUSE_PUBLIC_KEY="your_public_key"
-    LANGFUSE_HOST="https://cloud.langfuse.com" # Or your self-hosted Langfuse URL
-    ```
-
-#### Enabling the Plugin
-
-To enable Langfuse integration, initialize the Langfuse client and pass it to `goai-kit` using the `WithPlugin` option:
+Define tools that the LLM can use to access external information or perform actions. `goai-kit` handles the multi-turn conversation automatically.
 
 ```go
-package main
+// 1. Define tool arguments
+type CitySearchArgs struct {
+	Query string `json:"query" jsonschema_description:"The name of the city to search for."`
+}
 
-import (
-	"context"
-	"fmt"
-	"log"
-	"log/slog"
-	"os"
+// 2. Define the tool
+getCityIDTool := &goaikit.Tool[CitySearchArgs]{
+    Name:        "Get City ID",
+    Description: "Get the ID of a city based on its name.",
+    Runner: func(ctx *goaikit.ToolContext, args CitySearchArgs) (any, error) {
+        // Your logic here... e.g., database lookup
+        if strings.ToLower(args.Query) == "jamshideh" {
+            return "J-17", nil
+        }
+        return nil, fmt.Errorf("city not found")
+    },
+}
 
-	"github.com/henomis/langfuse-go"
-	"github.com/joho/godotenv"
-	"github.com/mhrlife/goai-kit"
+// 3. Define the final output structure
+type CityInfo struct {
+    CityName string `json:"city_name"`
+    CityID   string `json:"city_id"`
+}
+
+// 4. Call Ask with the tool
+cityInfo, err := goaikit.Ask[CityInfo](context.Background(), client,
+    goaikit.WithPrompt("What is the ID for the city of Jamshideh?"),
+    goaikit.WithTool(getCityIDTool),
 )
 
-type MyOutput struct {
-	Message string `json:"message"`
-}
-
-func main() {
-	godotenv.Load()
-
-	// Initialize Langfuse client
-	lf := langfuse.New(context.Background())
-	// Ensure to flush Langfuse events before your application exits
-	defer lf.Flush(context.Background())
-
-	// Create a new goai-kit client with the Langfuse plugin
-	client := goaikit.NewClient(
-		goaikit.WithDefaultModel("gpt-4o-mini"),
-		goaikit.WithLogLevel(slog.LevelDebug),
-		goaikit.WithPlugin(goaikit.LangfusePlugin(lf)), // Enable Langfuse
-	)
-
-	// ... rest of your code
-}
+fmt.Println(cityInfo.CityID) // "J-17"
 ```
 
-#### Usage Scenarios
+### 4. File & Image Uploads
 
-**1. Automatic Tracing for Each `Ask` Call**
-
-Once the Langfuse plugin is enabled, every call to `goaikit.Ask` will automatically create a new trace (if one isn't already in the context) and a generation observation in Langfuse.
+Send files (PDFs, images) for multimodal analysis.
 
 ```go
-	// (Assuming client is initialized with Langfuse plugin as shown above)
-	output, err := goaikit.Ask[MyOutput](context.Background(), client,
-		goaikit.WithPrompt("Tell me a short joke."),
-	)
-	if err != nil {
-		log.Fatalf("Error asking LLM: %v", err)
-	}
-	fmt.Printf("Joke: %s\n", output.Message)
-	// This call will automatically appear as a trace and generation in Langfuse.
+// Read image bytes
+imageBytes, _ := os.ReadFile("image.png")
+
+type ImageAnalysis struct {
+    Description string `json:"description"`
+}
+
+// Ask a question about the image
+analysis, err := goaikit.Ask[ImageAnalysis](context.Background(), client,
+    goaikit.WithPrompt("What is in this image?"),
+    goaikit.WithFile(goaikit.FileImage("image.png", imageBytes)),
+    goaikit.WithDefaultModel("google/gemini-pro-vision"), // Use a model that supports vision
+)
 ```
 
-**2. Grouping Multiple `Ask` Calls under a Single Trace with `WithTrace`**
+## Advanced Usage
 
-If you want to group multiple related `Ask` calls under a single Langfuse trace, you can use the `goaikit.WithTrace` function. You can also customize the name of individual LLM calls (generations) within this trace using `goaikit.WithSpanName`.
-Note: You'll need to import `github.com/henomis/langfuse-go/model` for `model.Trace`.
+### Using Different Providers
+
+`goai-kit` works with any OpenAI-compatible API. Configure the client with a base URL and API key.
+
+**Example: Google Gemini**
+```go
+client := goaikit.NewClient(
+    goaikit.WithAPIKey(os.Getenv("GEMINI_API_KEY")),
+    goaikit.WithBaseURL("https://generativelanguage.googleapis.com/v1beta/openai/"),
+    goaikit.WithDefaultModel("gemini-1.5-flash"),
+)
+```
+
+**Example: OpenRouter**
+```go
+client := goaikit.NewClient(
+    goaikit.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+    goaikit.WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+    goaikit.WithDefaultModel("openai/gpt-4o-mini"),
+)
+```
+
+### Langfuse Plugin for Observability
+
+Integrate with [Langfuse](https://langfuse.com/) to trace and debug your LLM calls.
+
+**1. Setup**
+```go
+// Initialize Langfuse client
+lf := langfuse.New(context.Background())
+defer lf.Flush(context.Background())
+
+// Add the plugin to your goai-kit client
+client := goaikit.NewClient(
+    goaikit.WithPlugin(goaikit.LangfusePlugin(lf)),
+    // ... other options
+)
+```
+
+**2. Grouping calls in a single trace**
+
+Use `WithTrace` to group multiple `Ask` calls into a single trace. Use `WithSpanName` to name individual steps. Each `Ask` call is automatically traced; `WithTrace` is for grouping them.
 
 ```go
-	// (Assuming client is initialized with Langfuse plugin as shown above)
+import "github.com/henomis/langfuse-go/model"
 
-	type QuestionResponse struct {
-		Answer string `json:"answer"`
-	}
-
-	_, err := goaikit.WithTrace[QuestionResponse](context.Background(), client, &model.Trace{Name: "MyCustomTrace"}, func(ctx context.Context) (*QuestionResponse, error) {
-		// First call, part of "MyCustomTrace"
-		_, err := goaikit.Ask[MyOutput](ctx, client,
-			goaikit.WithPrompt("What is the capital of France?"),
-			goaikit.WithSpanName("AskCapital"), // Custom name for this generation in Langfuse
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to ask capital: %w", err)
-		}
-
-		// Second call, also part of "MyCustomTrace"
-		return goaikit.Ask[QuestionResponse](ctx, client,
-			goaikit.WithPrompt("What is its population?"),
-			goaikit.WithSpanName("AskPopulation"), // Custom name for this generation
-		)
-	})
-
-	if err != nil {
-		log.Fatalf("Error in traced operations: %v", err)
-	}
-	// Both Ask calls will be logged under the "MyCustomTrace" in Langfuse,
-	// with individual generations named "AskCapital" and "AskPopulation".
+goaikit.WithTrace[ResponseType](ctx, client, &model.Trace{Name: "MyMultiStepFlow"}, 
+    func(ctx context.Context) (*ResponseType, error) {
+        // First call
+        step1, err := goaikit.Ask[Step1Output](ctx, client,
+            goaikit.WithPrompt("..."),
+            goaikit.WithSpanName("Step1-GetData"),
+        )
+        // ...
+        // Second call
+        return goaikit.Ask[ResponseType](ctx, client,
+            goaikit.WithPrompt("..."),
+            goaikit.WithSpanName("Step2-Analyze"),
+        )
+    },
+)
 ```
-
-## JSON Schema Tags
-
-This package uses `github.com/invopop/jsonschema` to infer the JSON schema from your Go types. You can leverage the various `jsonschema` struct tags (like `description`, `example`, `enum`, etc.) to customize the generated schema. Refer to the `invopop/jsonschema` documentation for available tags and their usage.
-
-## Compatibility
-
-This package is designed to work with **OpenAI-like interfaces**. You can change the base URL to point to compatible APIs (like OpenRouter, etc.) by setting the `OPENAI_API_BASE` environment variable or using the `goaikit.WithBaseURL` functional option when creating the client.
