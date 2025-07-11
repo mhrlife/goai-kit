@@ -108,57 +108,50 @@ analysis, err := goaikit.Ask[ImageAnalysis](context.Background(), client,
 `goai-kit` provides a simple Graph feature to orchestrate complex, multi-step workflows that can include loops and conditional logic. Each step in the graph is a `Node` that can modify a shared `Context` and decide which node to execute next.
 
 ```go
-// 1. Define a shared context for the graph's state
 type NumberGraphContext struct {
 	CurrentNumber int
 	TextualNumber string
 }
 
-// 2. Create the client
+const (
+	StageSuggestNumber = "suggest_number"
+	StageCheckOddEven  = "check_odd_even"
+	StageConvertToText = "convert_to_text"
+)
+
 client := goaikit.NewClient()
 
-// 3. Define the nodes
 suggestNumberNode := goaikit.Node[NumberGraphContext]{
-	Name: "suggest_number",
+	Name: StageSuggestNumber,
 	Runner: func(ctx context.Context, arg goaikit.NodeArg[NumberGraphContext]) (NumberGraphContext, string, error) {
-		newContext := arg.Context
-		newContext.CurrentNumber = rand.Intn(10) + 1 // Suggest a number from 1-10
-		fmt.Printf("Suggested number: %d\n", newContext.CurrentNumber)
-		// Go to the next node
-		return newContext, "check_odd_even", nil
+		arg.Context.CurrentNumber = rand.Intn(10) + 1
+		fmt.Printf("Suggested number: %d\n", arg.Context.CurrentNumber)
+		return arg.Context, StageCheckOddEven, nil
 	},
 }
 
 checkOddEvenNode := goaikit.Node[NumberGraphContext]{
-	Name: "check_odd_even",
+	Name: StageCheckOddEven,
 	Runner: func(ctx context.Context, arg goaikit.NodeArg[NumberGraphContext]) (NumberGraphContext, string, error) {
 		if arg.Context.CurrentNumber%2 != 0 {
 			fmt.Println("Number is odd, trying again...")
-			// Loop back to the first node
-			return arg.Context, "suggest_number", nil
+			return arg.Context, StageSuggestNumber, nil
 		}
 		fmt.Println("Number is even, continuing...")
-		// It's even, move on to convert it
-		return arg.Context, "convert_to_text", nil
+		return arg.Context, StageConvertToText, nil
 	},
 }
 
 convertToTextNode := goaikit.Node[NumberGraphContext]{
-	Name: "convert_to_text",
+	Name: StageConvertToText,
 	Runner: func(ctx context.Context, arg goaikit.NodeArg[NumberGraphContext]) (NumberGraphContext, string, error) {
-		// In a real app, you could use goaikit.Ask here to convert the number
 		numberMap := map[int]string{2: "two", 4: "four", 6: "six", 8: "eight", 10: "ten"}
-
-		newContext := arg.Context
-		newContext.TextualNumber = numberMap[newContext.CurrentNumber]
-		fmt.Printf("Converted to text: %s\n", newContext.TextualNumber)
-
-		// End the graph by returning an empty string for the next node
-		return newContext, "", nil
+		arg.Context.TextualNumber = numberMap[arg.Context.CurrentNumber]
+		fmt.Printf("Converted to text: %s\n", arg.Context.TextualNumber)
+		return arg.Context, "", nil
 	},
 }
 
-// 4. Create the graph from the nodes
 graph, err := goaikit.NewGraph("number_game",
 	suggestNumberNode,
 	checkOddEvenNode,
@@ -168,7 +161,6 @@ if err != nil {
 	log.Fatal(err)
 }
 
-// 5. Run the graph with an initial empty context
 finalContext, err := graph.Run(context.Background(), client, NumberGraphContext{})
 if err != nil {
 	log.Fatal(err)
