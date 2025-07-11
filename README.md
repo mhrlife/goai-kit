@@ -105,7 +105,13 @@ analysis, err := goaikit.Ask[ImageAnalysis](context.Background(), client,
 
 ### 5. Graphs for Multi-Step Workflows
 
-`goai-kit` provides a simple Graph feature to orchestrate complex, multi-step workflows that can include loops and conditional logic. Each step in the graph is a `Node` that can modify a shared `Context` and decide which node to execute next.
+`goai-kit` provides a simple Graph feature to orchestrate complex, multi-step workflows that can include loops and conditional logic. Each step in the graph is a `Node` that can modify a shared `Context` and decide which node to execute next. The `Runner` function of a `Node` returns the name of the next node to execute.
+
+You can control the flow using special string constants:
+- `goaikit.GraphExit`: Signals the graph to stop execution successfully. It's an alias for an empty string (`""`).
+- `goaikit.GraphRetry`: A special value that tells the graph to re-execute the current node immediately. This is useful for polling or retrying an action until a certain condition is met.
+
+Here's an example of a graph that generates random numbers until it finds an even one:
 
 ```go
 type NumberGraphContext struct {
@@ -148,7 +154,7 @@ convertToTextNode := goaikit.Node[NumberGraphContext]{
 		numberMap := map[int]string{2: "two", 4: "four", 6: "six", 8: "eight", 10: "ten"}
 		arg.Context.TextualNumber = numberMap[arg.Context.CurrentNumber]
 		fmt.Printf("Converted to text: %s\n", arg.Context.TextualNumber)
-		return arg.Context, "", nil
+		return arg.Context, goaikit.GraphExit, nil // Stop the graph
 	},
 }
 
