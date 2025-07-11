@@ -7,6 +7,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	GraphExit  string = ""
+	GraphRetry string = "__built_in__retry"
+)
+
 type Graph[Context any] struct {
 	name       string
 	nodes      map[string]Node[Context]
@@ -49,12 +54,12 @@ func (g *Graph[Context]) Run(ctx context.Context, client *Client, initialContext
 
 func (g *Graph[Context]) run(ctx context.Context, client *Client, initialContext Context) (*Context, error) {
 	currentContext := initialContext
-	nextNodeName := g.entrypoint
+	currentNodeName := g.entrypoint
 
-	for nextNodeName != "" {
-		node, ok := g.nodes[nextNodeName]
+	for currentNodeName != GraphExit {
+		node, ok := g.nodes[currentNodeName]
 		if !ok {
-			return nil, fmt.Errorf("node '%s' not found in graph", nextNodeName)
+			return nil, fmt.Errorf("node '%s' not found in graph", currentNodeName)
 		}
 
 		nodeArg := NodeArg[Context]{
@@ -64,6 +69,7 @@ func (g *Graph[Context]) run(ctx context.Context, client *Client, initialContext
 		}
 
 		var err error
+		var nextNodeName string
 		currentContext, nextNodeName, err = node.Runner(ctx, nodeArg)
 		if err != nil {
 			client.logger.Error("Node execution failed",
@@ -73,6 +79,12 @@ func (g *Graph[Context]) run(ctx context.Context, client *Client, initialContext
 
 			return nil, errors.Wrapf(err, "failed to run node %s", node.Name)
 		}
+
+		if nextNodeName == GraphRetry {
+			continue
+		}
+
+		currentNodeName = nextNodeName
 	}
 
 	return &currentContext, nil
