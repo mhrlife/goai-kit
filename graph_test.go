@@ -98,3 +98,45 @@ func TestGraphExecution(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, finalContext.TextualNumber, "The final textual number should not be empty")
 }
+
+func TestGraphRetry(t *testing.T) {
+	// 1. Define the data structure (Context) the graph will use
+	type RetryGraphContext struct {
+		RetryCount int
+	}
+
+	// 2. Setup the client
+	goaiClient := NewClient(
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	// 3. Define nodes
+	const (
+		StageRetryNode = "retry_node"
+	)
+
+	retryNode := Node[RetryGraphContext]{
+		Name: StageRetryNode,
+		Runner: func(ctx context.Context, arg NodeArg[RetryGraphContext]) (RetryGraphContext, string, error) {
+			arg.Context.RetryCount++
+			t.Logf("Retry count: %d", arg.Context.RetryCount)
+			if arg.Context.RetryCount < 3 {
+				return arg.Context, GraphRetry, nil
+			}
+			return arg.Context, GraphExit, nil
+		},
+	}
+
+	// 4. Create the graph
+	graph, err := NewGraph("retry_test", retryNode)
+	require.NoError(t, err)
+
+	// 5. Run the graph
+	initialContext := RetryGraphContext{RetryCount: 0}
+	finalContext, err := graph.Run(context.Background(), goaiClient, initialContext)
+	require.NoError(t, err)
+
+	// 6. Assert the result
+	require.NotNil(t, finalContext)
+	require.Equal(t, 3, finalContext.RetryCount)
+}
