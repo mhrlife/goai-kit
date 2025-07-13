@@ -84,6 +84,11 @@ func (g *Graph[Context]) run(ctx context.Context, client *Client, initialContext
 			continue
 		}
 
+		client.logger.Debug("Node executed successfully",
+			"node_name", node.Name,
+			"next_node", nextNodeName,
+		)
+
 		currentNodeName = nextNodeName
 	}
 
