@@ -16,6 +16,13 @@ type Node[Context any] struct {
 	Runner func(ctx context.Context, arg NodeArg[Context]) (Context, string, error)
 }
 
+func NewNode[Context any](name string, runner func(ctx context.Context, arg NodeArg[Context]) (Context, string, error)) Node[Context] {
+	return Node[Context]{
+		Name:   name,
+		Runner: runner,
+	}
+}
+
 type AICallNode[Context any, StructuredOutput any] struct {
 	Name            string
 	Callback        func(ctx context.Context, arg NodeArg[Context], aiOutput *StructuredOutput) (Context, string, error)
