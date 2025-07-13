@@ -175,6 +175,89 @@ if err != nil {
 fmt.Printf("The final number is: %s\n", finalContext.TextualNumber)
 ```
 
+#### Using `AICallNode` for AI-Powered Steps
+
+For nodes that need to call an LLM, `goai-kit` provides a convenient `AICallNode` wrapper. It simplifies the process by handling the AI call, structured output parsing, and error handling, letting you focus on the core logic.
+
+You only need to provide:
+- A `PromptGenerator` function that creates the prompt based on the current graph context.
+- A `Callback` function that processes the AI's structured output and updates the context.
+
+Here's an example of a two-stage AI graph that first generates a business idea and then refines it:
+
+```go
+import (
+	"context"
+	"fmt"
+	"log"
+	"github.com/mhrlife/goai-kit"
+)
+
+func main() {
+	// 1. Define the graph's context
+	type AIGraphContext struct {
+		InitialIdea string
+		RefinedIdea string
+	}
+
+	// 2. Setup the client
+	client := goaikit.NewClient(goaikit.WithDefaultModel("gpt-4o-mini"))
+
+	// 3. Define the AI nodes
+
+	// Stage 1: Generate a business idea
+	type IdeaOutput struct {
+		Idea string `json:"idea" jsonschema:"description=A short, innovative business idea."`
+	}
+
+	generateIdeaNode := goaikit.NewAICallNode(goaikit.AICallNode[AIGraphContext, IdeaOutput]{
+		Name: "generate_idea",
+		PromptGenerator: func(graphContext AIGraphContext) string {
+			return "Suggest a new business idea for a tech startup."
+		},
+		Callback: func(ctx context.Context, arg goaikit.NodeArg[AIGraphContext], aiOutput *IdeaOutput) (AIGraphContext, string, error) {
+			arg.Context.InitialIdea = aiOutput.Idea
+			fmt.Printf("Generated Idea: %s\n", arg.Context.InitialIdea)
+			return arg.Context, "refine_idea", nil // Go to the next node
+		},
+	})
+
+	// Stage 2: Refine the business idea
+	type RefinedIdeaOutput struct {
+		RefinedIdea string `json:"refined_idea" jsonschema:"description=A refined version of the business idea, making it more specific."`
+	}
+
+	refineIdeaNode := goaikit.NewAICallNode(goaikit.AICallNode[AIGraphContext, RefinedIdeaOutput]{
+		Name: "refine_idea",
+		PromptGenerator: func(graphContext AIGraphContext) string {
+			// Use the output from the previous stage
+			return fmt.Sprintf("Take this business idea and make it more specific and actionable: '%s'", graphContext.InitialIdea)
+		},
+		Callback: func(ctx context.Context, arg goaikit.NodeArg[AIGraphContext], aiOutput *RefinedIdeaOutput) (AIGraphContext, string, error) {
+			arg.Context.RefinedIdea = aiOutput.RefinedIdea
+			fmt.Printf("Refined Idea: %s\n", arg.Context.RefinedIdea)
+			return arg.Context, goaikit.GraphExit, nil // Stop the graph
+		},
+	})
+
+	// 4. Create and run the graph
+	graph, err := goaikit.NewGraph("ai_idea_generator",
+		generateIdeaNode,
+		refineIdeaNode,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	finalContext, err := graph.Run(context.Background(), client, AIGraphContext{})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("Final refined idea: %s\n", finalContext.RefinedIdea)
+}
+```
+
 ## Advanced Usage
 
 ### Using Different Providers
