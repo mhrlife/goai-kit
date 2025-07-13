@@ -163,8 +163,8 @@ func TestGraphExecutionWithAICallNode(t *testing.T) {
 
 	generateIdeaNode := NewAICallNode(AICallNode[AIGraphContext, IdeaOutput]{
 		Name: "generate_idea",
-		PromptGenerator: func(graphContext AIGraphContext) string {
-			return "Suggest a new business idea for a tech startup."
+		PromptGenerator: func(graphContext AIGraphContext) (string, error) {
+			return "Suggest a new business idea for a tech startup.", nil
 		},
 		Callback: func(ctx context.Context, arg NodeArg[AIGraphContext], aiOutput *IdeaOutput) (AIGraphContext, string, error) {
 			arg.Context.InitialIdea = aiOutput.Idea
@@ -179,10 +179,17 @@ func TestGraphExecutionWithAICallNode(t *testing.T) {
 
 	refineIdeaNode := NewAICallNode(AICallNode[AIGraphContext, RefinedIdeaOutput]{
 		Name: "refine_idea",
-		PromptGenerator: func(graphContext AIGraphContext) string {
-			return fmt.Sprintf("Take this business idea and make it more specific and actionable: '%s'", graphContext.InitialIdea)
+		PromptGenerator: func(graphContext AIGraphContext) (string, error) {
+			return fmt.Sprintf(
+				"Take this business idea and make it more specific and actionable: '%s'",
+				graphContext.InitialIdea,
+			), nil
 		},
-		Callback: func(ctx context.Context, arg NodeArg[AIGraphContext], aiOutput *RefinedIdeaOutput) (AIGraphContext, string, error) {
+		Callback: func(
+			ctx context.Context,
+			arg NodeArg[AIGraphContext],
+			aiOutput *RefinedIdeaOutput,
+		) (AIGraphContext, string, error) {
 			arg.Context.RefinedIdea = aiOutput.RefinedIdea
 			t.Logf("Refined Idea: %s", arg.Context.RefinedIdea)
 			return arg.Context, GraphExit, nil

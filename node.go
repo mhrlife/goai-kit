@@ -26,7 +26,7 @@ func NewNode[Context any](name string, runner func(ctx context.Context, arg Node
 type AICallNode[Context any, StructuredOutput any] struct {
 	Name            string
 	Callback        func(ctx context.Context, arg NodeArg[Context], aiOutput *StructuredOutput) (Context, string, error)
-	PromptGenerator func(graphContext Context) string
+	PromptGenerator func(graphContext Context) (string, error)
 	OtherOptions    []AskOption
 }
 
@@ -34,7 +34,15 @@ func NewAICallNode[Context any, StructuredOutput any](node AICallNode[Context, S
 	return Node[Context]{
 		Name: node.Name,
 		Runner: func(ctx context.Context, arg NodeArg[Context]) (Context, string, error) {
-			prompt := node.PromptGenerator(arg.Context)
+			prompt, err := node.PromptGenerator(arg.Context)
+			if err != nil {
+				arg.Client.logger.Error("(ai_node) Failed to generate prompt",
+					"node_name", node.Name,
+					"error", err,
+				)
+
+				return arg.Context, "", errors.Wrap(err, "failed to generate prompt for node "+node.Name)
+			}
 
 			options := []AskOption{
 				WithPrompt(prompt),

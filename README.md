@@ -180,7 +180,7 @@ fmt.Printf("The final number is: %s\n", finalContext.TextualNumber)
 For nodes that need to call an LLM, `goai-kit` provides a convenient `AICallNode` wrapper. It simplifies the process by handling the AI call, structured output parsing, and error handling, letting you focus on the core logic.
 
 You only need to provide:
-- A `PromptGenerator` function that creates the prompt based on the current graph context.
+- A `PromptGenerator` function that creates the prompt based on the current graph context. It can return an error, which will halt the graph's execution.
 - A `Callback` function that processes the AI's structured output and updates the context.
 
 Here's an example of a two-stage AI graph that first generates a business idea and then refines it:
@@ -212,8 +212,8 @@ func main() {
 
 	generateIdeaNode := goaikit.NewAICallNode(goaikit.AICallNode[AIGraphContext, IdeaOutput]{
 		Name: "generate_idea",
-		PromptGenerator: func(graphContext AIGraphContext) string {
-			return "Suggest a new business idea for a tech startup."
+		PromptGenerator: func(graphContext AIGraphContext) (string, error) {
+			return "Suggest a new business idea for a tech startup.", nil
 		},
 		Callback: func(ctx context.Context, arg goaikit.NodeArg[AIGraphContext], aiOutput *IdeaOutput) (AIGraphContext, string, error) {
 			arg.Context.InitialIdea = aiOutput.Idea
@@ -229,9 +229,9 @@ func main() {
 
 	refineIdeaNode := goaikit.NewAICallNode(goaikit.AICallNode[AIGraphContext, RefinedIdeaOutput]{
 		Name: "refine_idea",
-		PromptGenerator: func(graphContext AIGraphContext) string {
+		PromptGenerator: func(graphContext AIGraphContext) (string, error) {
 			// Use the output from the previous stage
-			return fmt.Sprintf("Take this business idea and make it more specific and actionable: '%s'", graphContext.InitialIdea)
+			return fmt.Sprintf("Take this business idea and make it more specific and actionable: '%s'", graphContext.InitialIdea), nil
 		},
 		Callback: func(ctx context.Context, arg goaikit.NodeArg[AIGraphContext], aiOutput *RefinedIdeaOutput) (AIGraphContext, string, error) {
 			arg.Context.RefinedIdea = aiOutput.RefinedIdea
