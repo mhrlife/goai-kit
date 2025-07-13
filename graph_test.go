@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"log/slog"
 	"math/rand"
+	"os"
 	"testing"
 )
 
@@ -105,8 +106,10 @@ func TestGraphRetry(t *testing.T) {
 		RetryCount int
 	}
 
-	// 2. Setup the client
 	goaiClient := NewClient(
+		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
 		WithLogLevel(slog.LevelDebug),
 	)
 
@@ -139,4 +142,61 @@ func TestGraphRetry(t *testing.T) {
 	// 6. Assert the result
 	require.NotNil(t, finalContext)
 	require.Equal(t, 3, finalContext.RetryCount)
+}
+
+func TestGraphExecutionWithAICallNode(t *testing.T) {
+	type AIGraphContext struct {
+		InitialIdea string
+		RefinedIdea string
+	}
+
+	goaiClient := NewClient(
+		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	type IdeaOutput struct {
+		Idea string `json:"idea" jsonschema:"description=A short, innovative business idea."`
+	}
+
+	generateIdeaNode := NewAICallNode(AICallNode[AIGraphContext, IdeaOutput]{
+		Name: "generate_idea",
+		PromptGenerator: func(graphContext AIGraphContext) string {
+			return "Suggest a new business idea for a tech startup."
+		},
+		Callback: func(ctx context.Context, arg NodeArg[AIGraphContext], aiOutput *IdeaOutput) (AIGraphContext, string, error) {
+			arg.Context.InitialIdea = aiOutput.Idea
+			t.Logf("Generated Idea: %s", arg.Context.InitialIdea)
+			return arg.Context, "refine_idea", nil
+		},
+	})
+
+	type RefinedIdeaOutput struct {
+		RefinedIdea string `json:"refined_idea" jsonschema:"description=A refined version of the business idea, making it more specific."`
+	}
+
+	refineIdeaNode := NewAICallNode(AICallNode[AIGraphContext, RefinedIdeaOutput]{
+		Name: "refine_idea",
+		PromptGenerator: func(graphContext AIGraphContext) string {
+			return fmt.Sprintf("Take this business idea and make it more specific and actionable: '%s'", graphContext.InitialIdea)
+		},
+		Callback: func(ctx context.Context, arg NodeArg[AIGraphContext], aiOutput *RefinedIdeaOutput) (AIGraphContext, string, error) {
+			arg.Context.RefinedIdea = aiOutput.RefinedIdea
+			t.Logf("Refined Idea: %s", arg.Context.RefinedIdea)
+			return arg.Context, GraphExit, nil
+		},
+	})
+
+	graph, err := NewGraph("ai_idea_generator",
+		generateIdeaNode,
+		refineIdeaNode,
+	)
+	require.NoError(t, err)
+
+	finalContext, err := graph.Run(context.Background(), goaiClient, AIGraphContext{})
+	require.NoError(t, err)
+	require.NotEmpty(t, finalContext.InitialIdea, "The initial idea should not be empty")
+	require.NotEmpty(t, finalContext.RefinedIdea, "The refined idea should not be empty")
 }

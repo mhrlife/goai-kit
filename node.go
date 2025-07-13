@@ -1,6 +1,9 @@
 package goaikit
 
-import "context"
+import (
+	"context"
+	"github.com/pkg/errors"
+)
 
 type NodeArg[Context any] struct {
 	Context  Context
@@ -8,8 +11,6 @@ type NodeArg[Context any] struct {
 	Metadata map[string]any
 }
 
-// The string returned by Runner is the name of the next node to execute.
-// An empty string "" means the graph execution should stop.
 type Node[Context any] struct {
 	Name   string
 	Runner func(ctx context.Context, arg NodeArg[Context]) (Context, string, error)
@@ -18,7 +19,7 @@ type Node[Context any] struct {
 type AICallNode[Context any, StructuredOutput any] struct {
 	Name            string
 	Callback        func(ctx context.Context, arg NodeArg[Context], aiOutput *StructuredOutput) (Context, string, error)
-	PromptGenerator func() string
+	PromptGenerator func(graphContext Context) string
 	OtherOptions    []AskOption
 }
 
@@ -26,7 +27,7 @@ func NewAICallNode[Context any, StructuredOutput any](node AICallNode[Context, S
 	return Node[Context]{
 		Name: node.Name,
 		Runner: func(ctx context.Context, arg NodeArg[Context]) (Context, string, error) {
-			prompt := node.PromptGenerator()
+			prompt := node.PromptGenerator(arg.Context)
 
 			options := []AskOption{
 				WithPrompt(prompt),
@@ -38,7 +39,12 @@ func NewAICallNode[Context any, StructuredOutput any](node AICallNode[Context, S
 
 			aiOutput, err := Ask[StructuredOutput](ctx, arg.Client, options...)
 			if err != nil {
-				return arg.Context, "", err
+				arg.Client.logger.Error("(ai_node) AI call failed",
+					"node_name", node.Name,
+					"error", err,
+				)
+
+				return arg.Context, "", errors.Wrap(err, "failed to call AI for node "+node.Name)
 			}
 
 			return node.Callback(ctx, arg, aiOutput)
