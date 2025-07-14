@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/avast/retry-go/v4"
-	"github.com/henomis/langfuse-go/model"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
@@ -156,27 +155,12 @@ aa:
 					"arguments", call.Function.Arguments,
 				)
 
-				var result any
-				var err error
-				_, _ = WithTrace[any](ctx, client,
-					&model.Trace{
-						Name: fmt.Sprintf("tool_%s", call.Function.Name),
-						Metadata: map[string]any{
-							"tool_name":    call.Function.Name,
-							"tool_args":    call.Function.Arguments,
-							"tool_call_id": call.ID,
-						},
-					},
-					func(ctx context.Context) (*any, error) {
-						toolContext := &ToolContext{
-							Client: client,
-							Ctx:    ctx,
-						}
+				toolContext := &ToolContext{
+					Client: client,
+					Ctx:    ctx,
+				}
 
-						result, err = cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
-						return nil, err
-					},
-				)
+				result, err := cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
 				if err != nil {
 					client.logger.Error("Tool call failed",
 						"tool", call.Function.Name,

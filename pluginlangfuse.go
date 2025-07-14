@@ -10,9 +10,8 @@ import (
 	"github.com/openai/openai-go"
 )
 
-// langfuseTraceIDKey is a context key for storing the LangFuse Trace ID.
-// This should match the key used in ask.go
 type langfuseTraceIDKey struct{}
+type langfuseParentObservationID struct{}
 
 // langfuseGenerationKey is a context key for storing the LangFuse Generation observation.
 type langfuseGenerationKey struct{}
@@ -70,17 +69,20 @@ func (p *langfusePlugin) beforeRequestHook(
 		}
 	}
 
+	observationID, _ := ctx.Value(langfuseParentObservationID{}).(string)
+
 	name := "openai-chat-completion"
 	if ctx.config.SpanName != "" {
 		name = ctx.config.SpanName
 	}
 
 	generation, err := p.lfClient.Generation(&model.Generation{
-		Name:      name,
-		Input:     params,
-		Model:     params.Model,
-		TraceID:   traceID,
-		StartTime: openai.Ptr(time.Now()),
+		Name:                name,
+		Input:               params,
+		Model:               params.Model,
+		TraceID:             traceID,
+		ParentObservationID: observationID,
+		StartTime:           openai.Ptr(time.Now()),
 	}, nil)
 	if err != nil {
 		ctx.logger.Error("LangFuse Error: Failed to create Generation",
@@ -99,6 +101,7 @@ func (p *langfusePlugin) beforeRequestHook(
 
 	// Add the generation observation to the context so the after hook can access it
 	ctx.WithValue(langfuseGenerationKey{}, generation)
+	ctx.WithValue(langfuseParentObservationID{}, generation.ID)
 
 	return params
 }
