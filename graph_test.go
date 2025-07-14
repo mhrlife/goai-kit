@@ -3,6 +3,7 @@ package goaikit
 import (
 	"context"
 	"fmt"
+	"github.com/henomis/langfuse-go"
 	"github.com/stretchr/testify/require"
 	"log/slog"
 	"math/rand"
@@ -145,31 +146,62 @@ func TestGraphRetry(t *testing.T) {
 }
 
 func TestGraphExecutionWithAICallNode(t *testing.T) {
+	lf := langfuse.New(context.Background())
+	defer lf.Flush(context.Background())
+
 	type AIGraphContext struct {
 		InitialIdea string
 		RefinedIdea string
 	}
 
 	goaiClient := NewClient(
-		WithDefaultModel("google/gemini-2.5-flash-preview-05-20"),
+		WithDefaultModel("openai/gpt-4.1-nano"),
 		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
 		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
 		WithLogLevel(slog.LevelDebug),
+		WithPlugin(LangfusePlugin(lf)),
 	)
 
 	type IdeaOutput struct {
-		Idea string `json:"idea" jsonschema:"description=A short, innovative business idea."`
+		Idea     string `json:"idea" jsonschema:"description=A short, innovative business idea."`
+		Category string
 	}
 
 	generateIdeaNode := NewAICallNode(AICallNode[AIGraphContext, IdeaOutput]{
 		Name: "generate_idea",
 		PromptGenerator: func(graphContext AIGraphContext) (string, error) {
-			return "Suggest a new business idea for a tech startup.", nil
+			return `Suggest a new business idea.
+You MUST use "suggest_category" to detect the idea's category from the database!`, nil
 		},
 		Callback: func(ctx context.Context, arg NodeArg[AIGraphContext], aiOutput *IdeaOutput) (AIGraphContext, string, error) {
 			arg.Context.InitialIdea = aiOutput.Idea
-			t.Logf("Generated Idea: %s", arg.Context.InitialIdea)
+			t.Logf("Generated Idea: %s\n", arg.Context.InitialIdea)
+			t.Logf("Its category is : %s\n", aiOutput.Category)
 			return arg.Context, "refine_idea", nil
+		},
+		OtherOptions: func(graphContext AIGraphContext) ([]AskOption, error) {
+			type ToolArg struct {
+				Idea string
+			}
+
+			return []AskOption{
+				WithTool(&Tool[ToolArg]{
+					Name:        "suggest_category",
+					Description: "Suggest a category for the business idea.",
+					Runner: func(ctx *ToolContext, args ToolArg) (any, error) {
+						result, err := Ask[string](
+							ctx,
+							ctx.Client,
+							WithPrompt(fmt.Sprintf("What category does this business idea '%s' belong to?", args.Idea)),
+						)
+						if err != nil {
+							return nil, fmt.Errorf("failed to enrich idea: %w", err)
+						}
+
+						return *result, nil
+					},
+				}),
+			}, nil
 		},
 	})
 

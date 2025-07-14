@@ -7,12 +7,13 @@ import (
 )
 
 type ToolContext struct {
+	context.Context
+
 	Client *Client
-	Ctx    context.Context
 }
 
-func (t *ToolContext) RequestContext() context.Context {
-	return t.Ctx
+func (t *ToolContext) WithValue(key, value any) {
+	t.Context = context.WithValue(t.Context, key, value)
 }
 
 // === Tool Definition ===

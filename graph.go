@@ -75,19 +75,8 @@ func (g *Graph[Context]) run(ctx context.Context, client *Client, initialContext
 		var err error
 		var nextNodeName string
 
-		_, _ = WithTrace[Context](ctx, client, &model.Trace{
-			Name: fmt.Sprintf("itr_%d_node_%s", i, node.Name),
-			Metadata: map[string]any{
-				"node_name":     node.Name,
-				"node_index":    i,
-				"node_context":  fmt.Sprintf("%+v", nodeArg.Context),
-				"node_metadata": nodeArg.Metadata,
-			},
-		}, func(ctx context.Context) (*Context, error) {
-			currentContext, nextNodeName, err = node.Runner(ctx, nodeArg)
-			return nil, err
-		})
-
+		currentContext, nextNodeName, err = node.Runner(ctx, nodeArg)
+		
 		if err != nil {
 			client.logger.Error("Node execution failed",
 				"node_name", node.Name,

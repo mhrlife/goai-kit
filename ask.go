@@ -41,7 +41,7 @@ type AskConfig struct {
 	Retries                   uint // Number of retries for the request
 
 	// Plugin Inputs
-	SpanName string
+	GenerationName string
 }
 
 func Ask[Output any](ctx context.Context, client *Client, askOpts ...AskOption) (*Output, error) {
@@ -156,9 +156,11 @@ aa:
 				)
 
 				toolContext := &ToolContext{
-					Client: client,
-					Ctx:    ctx,
+					Client:  client,
+					Context: reqContext,
 				}
+
+				toolContext.WithValue("observation_name", call.Function.Name)
 
 				result, err := cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
 				if err != nil {

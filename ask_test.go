@@ -68,7 +68,7 @@ func TestOpenRouterProvider(t *testing.T) {
 	}, func(ctx context.Context) (*Response, error) {
 		out, err := Ask[TestOutput](ctx, goaiClient,
 			WithPrompt("Say hello and give me a positive, between 10 and 20, number."),
-			WithSpanName("Ask for positive number"),
+			WithGenerationName("Ask for positive number"),
 		)
 		if err != nil {
 			return nil, err
@@ -80,7 +80,7 @@ func TestOpenRouterProvider(t *testing.T) {
 			ctx,
 			goaiClient,
 			WithPrompt("is %v positive?", out.Number),
-			WithSpanName("Check if number is positive"),
+			WithGenerationName("Check if number is positive"),
 		)
 	}, WithTraceOutput(func(t *Response) any {
 		return t.IsPositive

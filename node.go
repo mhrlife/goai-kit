@@ -46,7 +46,7 @@ func NewAICallNode[Context any, StructuredOutput any](node AICallNode[Context, S
 
 			options := []AskOption{
 				WithPrompt(prompt),
-				WithSpanName("ai_node_" + node.Name),
+				WithGenerationName("ai_node_" + node.Name),
 			}
 
 			if node.OtherOptions != nil {

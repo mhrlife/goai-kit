@@ -72,8 +72,13 @@ func (p *langfusePlugin) beforeRequestHook(
 	observationID, _ := ctx.Value(langfuseParentObservationID{}).(string)
 
 	name := "openai-chat-completion"
-	if ctx.config.SpanName != "" {
-		name = ctx.config.SpanName
+	if ctx.config.GenerationName != "" {
+		name = ctx.config.GenerationName
+	} else {
+		ctxName, ok := ctx.Value("observation_name").(string)
+		if ok && ctxName != "" {
+			name = ctxName
+		}
 	}
 
 	generation, err := p.lfClient.Generation(&model.Generation{
@@ -216,8 +221,8 @@ func WithTraceOutput[T any](f func(t *T) any) TraceModifier[T] {
 	}
 }
 
-func WithSpanName(name string) AskOption {
+func WithGenerationName(name string) AskOption {
 	return func(config *AskConfig) {
-		config.SpanName = name
+		config.GenerationName = name
 	}
 }
