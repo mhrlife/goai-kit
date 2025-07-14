@@ -1,12 +1,18 @@
 package goaikit
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 )
 
 type ToolContext struct {
 	Client *Client
+	Ctx    context.Context
+}
+
+func (t *ToolContext) RequestContext() context.Context {
+	return t.Ctx
 }
 
 // === Tool Definition ===
