@@ -27,7 +27,7 @@ type AICallNode[Context any, StructuredOutput any] struct {
 	Name            string
 	Callback        func(ctx context.Context, arg NodeArg[Context], aiOutput *StructuredOutput) (Context, string, error)
 	PromptGenerator func(graphContext Context) (string, error)
-	OtherOptions    []AskOption
+	OtherOptions    func(graphContext Context) ([]AskOption, error)
 }
 
 func NewAICallNode[Context any, StructuredOutput any](node AICallNode[Context, StructuredOutput]) Node[Context] {
@@ -48,8 +48,18 @@ func NewAICallNode[Context any, StructuredOutput any](node AICallNode[Context, S
 				WithPrompt(prompt),
 			}
 
-			if len(node.OtherOptions) > 0 {
-				options = append(options, node.OtherOptions...)
+			if node.OtherOptions != nil {
+				otherOptions, err := node.OtherOptions(arg.Context)
+				if err != nil {
+					arg.Client.logger.Error("(ai_node) Failed to get other options",
+						"node_name", node.Name,
+						"error", err,
+					)
+
+					return arg.Context, "", errors.Wrap(err, "failed to get other options for node "+node.Name)
+				}
+
+				options = append(options, otherOptions...)
 			}
 
 			aiOutput, err := Ask[StructuredOutput](ctx, arg.Client, options...)
