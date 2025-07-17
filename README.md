@@ -85,7 +85,7 @@ fmt.Println(cityInfo.CityID) // "J-17"
 
 ### 4. File & Image Uploads
 
-Send files (PDFs, images) for multimodal analysis.
+Send files (PDFs, images) for multimodal analysis. You can send PDF files using `goaikit.FilePDF` and images using `goaikit.FileImage`.
 
 ```go
 // Read image bytes
@@ -98,12 +98,81 @@ type ImageAnalysis struct {
 // Ask a question about the image
 analysis, err := goaikit.Ask[ImageAnalysis](context.Background(), client,
     goaikit.WithPrompt("What is in this image?"),
-    goaikit.WithFile(goaikit.FileImage("image.png", imageBytes)),
+    goaikit.WithFile(goaikit.FileImage("image/png", imageBytes)), // Pass the MIME type
     goaikit.WithDefaultModel("google/gemini-pro-vision"), // Use a model that supports vision
 )
 ```
 
-### 5. Graphs for Multi-Step Workflows
+### 5. Dynamic Prompts with Go Templates
+
+`goai-kit` supports Go's built-in `text/template` engine to create dynamic prompts. This allows you to separate your prompt logic from your application code and build complex prompt structures with conditions and loops.
+
+**1. Create your template file**
+
+Create a file with a `.tpl` extension (e.g., `prompts/hello.tpl`):
+
+```gotemplate
+{{if .Context.Ready}}Ready: {{end}}Hello {{ .Data.Name }}
+```
+
+The template has access to a `Render` struct containing:
+- `.Context`: A custom, typed struct you define for controlling template logic (e.g., flags, user state).
+- `.Data`: A `map[string]any` or any other struct for injecting dynamic data into the prompt.
+
+**2. Load and execute the template in your Go code**
+
+Use Go's `embed` package to load your templates and then use the `Template` manager to execute them.
+
+```go
+import (
+	"context"
+	"embed"
+	"fmt"
+	"log"
+	"github.com/mhrlife/goai-kit"
+)
+
+//go:embed prompts/*.tpl
+var promptTemplates embed.FS
+
+// Define a context for your templates
+type PromptContext struct {
+	Ready bool
+}
+
+func main() {
+	// 1. Create a new template manager
+	tpl := goaikit.NewTemplate[PromptContext]()
+
+	// 2. Load templates from the embedded filesystem.
+	// This assumes your templates are in a 'prompts' directory.
+	err := tpl.Load(promptTemplates)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// 3. Execute the template to generate a prompt
+	prompt, err := tpl.Execute("hello", goaikit.Render[PromptContext]{
+		Context: PromptContext{Ready: true},
+		Data:    map[string]any{"Name": "Amir"},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(prompt)
+	// Output: Ready: Hello Amir
+
+	// You can then use this dynamic prompt with goaikit.Ask
+	// client := goaikit.NewClient()
+	// response, err := goaikit.Ask[string](context.Background(), client,
+	//     goaikit.WithPrompt(prompt),
+	// )
+	// ...
+}
+```
+
+### 6. Graphs for Multi-Step Workflows
 
 `goai-kit` provides a simple Graph feature to orchestrate complex, multi-step workflows that can include loops and conditional logic. Each step in the graph is a `Node` that can modify a shared `Context` and decide which node to execute next. The `Runner` function of a `Node` returns the name of the next node to execute.
 
@@ -282,6 +351,43 @@ client := goaikit.NewClient(
 )
 ```
 
+### OpenRouter Specific Features
+
+When using [OpenRouter](https://openrouter.ai/), you can use special options to control model routing and file parsing.
+
+**Model Routing**
+
+Force OpenRouter to select from a specific list of providers.
+
+```go
+client := goaikit.NewClient(
+    // ... OpenRouter config ...
+)
+
+// This call will only use models from Anthropic or Google
+output, err := goaikit.Ask[string](context.Background(), client,
+    goaikit.WithPrompt("Tell me a joke."),
+    goaikit.WithModel("best"), // Use a routing model like "best"
+    goaikit.WithOpenRouterProviders("anthropic", "google"),
+)
+```
+
+**Advanced File Parsing**
+
+By default, file content is extracted by the model itself. With OpenRouter, you can specify a dedicated OCR engine for better results, especially with images.
+
+```go
+// Read image bytes
+imageBytes, _ := os.ReadFile("image.png")
+
+// Ask a question about the image using Mistral's OCR engine
+analysis, err := goaikit.Ask[string](context.Background(), client,
+    goaikit.WithPrompt("What text is in this image?"),
+    goaikit.WithFile(goaikit.FileImage("image/png", imageBytes)),
+    goaikit.WithOpenRouterFileParser(goaikit.ParserEngineMistralOCR),
+)
+```
+
 ### Langfuse Plugin for Observability
 
 Integrate with [Langfuse](https://langfuse.com/) to trace and debug your LLM calls.
@@ -301,7 +407,7 @@ client := goaikit.NewClient(
 
 **2. Grouping calls in a single trace**
 
-Use `WithTrace` to group multiple `Ask` calls into a single trace. Use `WithSpanName` to name individual steps. Each `Ask` call is automatically traced; `WithTrace` is for grouping them.
+Use `WithTrace` to group multiple `Ask` calls into a single trace. Use `WithGenerationName` to name individual steps (which become Langfuse "Generations"). Each `Ask` call is automatically traced as a generation; `WithTrace` is for grouping them under a single parent trace.
 
 ```go
 import "github.com/henomis/langfuse-go/model"
@@ -311,13 +417,13 @@ goaikit.WithTrace[ResponseType](ctx, client, &model.Trace{Name: "MyMultiStepFlow
         // First call
         step1, err := goaikit.Ask[Step1Output](ctx, client,
             goaikit.WithPrompt("..."),
-            goaikit.WithSpanName("Step1-GetData"),
+            goaikit.WithGenerationName("Step1-GetData"),
         )
         // ...
         // Second call
         return goaikit.Ask[ResponseType](ctx, client,
             goaikit.WithPrompt("..."),
-            goaikit.WithSpanName("Step2-Analyze"),
+            goaikit.WithGenerationName("Step2-Analyze"),
         )
     },
 )

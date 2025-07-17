@@ -1,0 +1,1 @@
+{{if .Context.Ready}}Ready: {{end}}Hello {{ .Data.Name }}
