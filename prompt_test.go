@@ -3,10 +3,11 @@ package goaikit
 import (
 	"embed"
 	"github.com/stretchr/testify/require"
+	"log/slog"
 	"testing"
 )
 
-//go:embed fixture/template/*.tpl
+//go:embed fixture/template/**.tpl
 var tplFS embed.FS
 
 func TestRender(t *testing.T) {
@@ -38,4 +39,29 @@ func TestRender(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, "Ready: Hello Amir", rendered)
+}
+
+func TestWithNested(t *testing.T) {
+	slog.SetLogLoggerLevel(slog.LevelDebug)
+
+	type Context struct {
+		Nested bool
+		Ready  bool
+	}
+
+	tpl := NewTemplate[Context]()
+	err := tpl.Load(tplFS)
+	require.NoError(t, err)
+
+	rendered, err := tpl.Execute("hello", Render[Context]{
+		Context: Context{
+			Nested: true,
+		},
+		Data: map[string]any{
+			"Name": "Reza",
+		},
+	})
+	
+	require.NoError(t, err)
+	require.Equal(t, "Hello Reza\nAlso supports nested", rendered)
 }

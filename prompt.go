@@ -5,8 +5,8 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"path/filepath"
-	"strings"
 	"text/template"
 )
 
@@ -21,48 +21,75 @@ type Template[Context any] interface {
 }
 
 type manager[Context any] struct {
-	templates map[string]*template.Template
+	templateSet *template.Template
 }
 
 func NewTemplate[Context any]() Template[Context] {
-	return &manager[Context]{templates: make(map[string]*template.Template)}
+	return &manager[Context]{}
 }
 
 func (m *manager[Context]) Load(fileSystem embed.FS) error {
-	return fs.WalkDir(fileSystem, ".", func(path string, d fs.DirEntry, err error) error {
+	var templateFiles []string
+
+	err := fs.WalkDir(fileSystem, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-
-		if d.IsDir() {
-			return nil
+		if !d.IsDir() {
+			ext := filepath.Ext(path)
+			if ext == ".tpl" || ext == ".tmpl" || ext == ".gotmpl" {
+				templateFiles = append(templateFiles, path)
+			}
 		}
-
-		ext := filepath.Ext(path)
-		if ext != ".tpl" && ext != ".tmpl" && ext != ".gotmpl" {
-			return nil
-		}
-
-		data, err := fileSystem.ReadFile(path)
-		if err != nil {
-			return err
-		}
-
-		name := strings.TrimSuffix(filepath.Base(path), ext)
-		tmpl, err := template.New(name).Parse(string(data))
-		if err != nil {
-			return err
-		}
-
-		m.templates[name] = tmpl
-
 		return nil
 	})
+
+	if err != nil {
+		return err
+	}
+
+	if len(templateFiles) == 0 {
+		return fmt.Errorf("no template files found")
+	}
+
+	slog.Debug("Loading templates", "files", templateFiles)
+
+	tmplSet, err := template.ParseFS(fileSystem, templateFiles...)
+	if err != nil {
+		return err
+	}
+
+	m.templateSet = tmplSet
+	return nil
 }
 
 func (m *manager[Context]) Execute(name string, args Render[Context]) (string, error) {
-	tmpl, ok := m.templates[name]
-	if !ok {
+	if m.templateSet == nil {
+		return "", fmt.Errorf("templates not loaded")
+	}
+
+	// Try to find the template by name
+	var tmpl *template.Template
+
+	// First try the exact name
+	tmpl = m.templateSet.Lookup(name)
+
+	// If not found, try with .tpl extension
+	if tmpl == nil {
+		tmpl = m.templateSet.Lookup(name + ".tpl")
+	}
+
+	// If still not found, try other extensions
+	if tmpl == nil {
+		for _, ext := range []string{".tmpl", ".gotmpl"} {
+			tmpl = m.templateSet.Lookup(name + ext)
+			if tmpl != nil {
+				break
+			}
+		}
+	}
+
+	if tmpl == nil {
 		return "", fmt.Errorf("template %q not found", name)
 	}
 
