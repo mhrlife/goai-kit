@@ -2,7 +2,6 @@ package goaikit
 
 import (
 	"embed"
-	"fmt"
 	"github.com/stretchr/testify/require"
 	"log/slog"
 	"testing"
@@ -85,5 +84,6 @@ func TestToJson(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	fmt.Println(render)
+	require.Contains(t, render, `The name of the user`)
+	require.Contains(t, render, `"name": "Ali"`)
 }
