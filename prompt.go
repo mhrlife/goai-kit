@@ -109,7 +109,7 @@ func toJSON(v interface{}) string {
 	}
 
 	jsonschema := MarshalToSchema(v)
-	jsonSchemaBytes, err := json.MarshalIndent(jsonschema["properties"], "", "  ")
+	jsonSchemaBytes, err := json.MarshalIndent(jsonschema, "", "  ")
 	if err != nil {
 		return "Error converting schema to JSON: " + err.Error()
 	}
