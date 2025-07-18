@@ -2,6 +2,7 @@ package goaikit
 
 import (
 	"embed"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"log/slog"
 	"testing"
@@ -61,7 +62,28 @@ func TestWithNested(t *testing.T) {
 			"Name": "Reza",
 		},
 	})
-	
+
 	require.NoError(t, err)
 	require.Equal(t, "Hello Reza\nAlso supports nested", rendered)
+}
+
+func TestToJson(t *testing.T) {
+	type Context struct {
+		Name string `json:"name" jsonschema_description:"The name of the user"`
+		Age  int    `json:"age"`
+	}
+
+	tpl := NewTemplate[Context]()
+	err := tpl.Load(tplFS)
+	require.NoError(t, err)
+
+	render, err := tpl.Execute("json", Render[Context]{
+		Context: Context{
+			Name: "Ali",
+			Age:  20,
+		},
+	})
+	require.NoError(t, err)
+
+	fmt.Println(render)
 }

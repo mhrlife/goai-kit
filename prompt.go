@@ -3,6 +3,7 @@ package goaikit
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -54,7 +55,7 @@ func (m *manager[Context]) Load(fileSystem embed.FS) error {
 
 	slog.Debug("Loading templates", "files", templateFiles)
 
-	tmplSet, err := template.ParseFS(fileSystem, templateFiles...)
+	tmplSet, err := template.New("").Funcs(funcMap).ParseFS(fileSystem, templateFiles...)
 	if err != nil {
 		return err
 	}
@@ -99,4 +100,31 @@ func (m *manager[Context]) Execute(name string, args Render[Context]) (string, e
 	}
 
 	return buf.String(), nil
+}
+
+func toJSON(v interface{}) string {
+	jsonBytes, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "Error converting to JSON: " + err.Error()
+	}
+
+	jsonschema := MarshalToSchema(v)
+	jsonSchemaBytes, err := json.MarshalIndent(jsonschema["properties"], "", "  ")
+	if err != nil {
+		return "Error converting schema to JSON: " + err.Error()
+	}
+
+	return fmt.Sprintf(`
+**JSON Values:**
+`+"```"+`
+%s
+`+"```"+`
+**JSON Schema Definition:**
+`+"```"+`
+%s
+`+"```", string(jsonBytes), string(jsonSchemaBytes))
+}
+
+var funcMap = template.FuncMap{
+	"tojson": toJSON,
 }
