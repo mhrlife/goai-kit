@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/avast/retry-go/v4"
+	"github.com/henomis/langfuse-go/model"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
@@ -162,7 +163,16 @@ aa:
 
 				toolContext.WithValue("observation_name", call.Function.Name)
 
-				result, err := cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
+				var result any
+
+				_, _ = WithSpan[any](toolContext.Context, client, &model.Span{
+					Input: call.Function.Arguments,
+					Name:  fmt.Sprintf("tool_call_%s", call.Function.Name),
+				}, func(ctx context.Context) (*any, error) {
+					toolContext.Context = ctx
+					result, err = cfg.Tools[call.Function.Name].Run(toolContext, call.Function.Arguments)
+					return &result, err
+				})
 				if err != nil {
 					client.logger.Error("Tool call failed",
 						"tool", call.Function.Name,

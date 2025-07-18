@@ -2,6 +2,7 @@ package goaikit
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 )
 
 type langfuseTraceIDKey struct{}
+type langfuseSpanKey struct{}
 type langfuseParentObservationID struct{}
 
 // langfuseGenerationKey is a context key for storing the LangFuse Generation observation.
@@ -225,4 +227,58 @@ func WithGenerationName(name string) AskOption {
 	return func(config *AskConfig) {
 		config.GenerationName = name
 	}
+}
+
+func WithSpan[T any](
+	ctx context.Context,
+	c *Client,
+	span *model.Span,
+	call func(ctx context.Context) (*T, error),
+) (*T, error) {
+	if c.config.lf == nil {
+		c.logger.Debug("LangFuse client not configured, skipping trace")
+
+		return call(ctx)
+	}
+
+	span.TraceID, _ = ctx.Value(langfuseTraceIDKey{}).(string)
+	parentID, _ := ctx.Value(langfuseParentObservationID{}).(string)
+	if parentID != "" {
+		span.ParentObservationID = parentID
+	}
+
+	span, err := c.config.lf.Span(span, nil)
+	if err != nil {
+		c.logger.Error("LangFuse Error: Failed to create Span",
+			"error", err,
+			"span_name", span.Name,
+		)
+
+		return nil, fmt.Errorf("failed to create LangFuse span: %w", err)
+	}
+
+	ctx = context.WithValue(ctx, langfuseParentObservationID{}, span.ID)
+	ctx = context.WithValue(ctx, langfuseSpanKey{}, span)
+
+	response, err := call(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if response != nil {
+		responseBytes, _ := json.MarshalIndent(*response, "", "  ")
+		span.Output = string(responseBytes)
+	}
+
+	if _, err := c.config.lf.SpanEnd(span); err != nil {
+		c.logger.Error("LangFuse Error: Failed to create Span",
+			"error", err,
+			"span_id", span.ID,
+			"trace_id", span.TraceID,
+		)
+
+		return response, nil
+	}
+
+	return response, nil
 }
