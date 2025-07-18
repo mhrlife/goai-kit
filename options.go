@@ -60,6 +60,12 @@ func WithMaxTokens(tokens int64) AskOption {
 	return func(ac *AskConfig) { ac.MaxTokens = &tokens }
 }
 
+func WithReasoningEffort(effort string) AskOption {
+	return func(config *AskConfig) {
+		config.ReasoningEffort = &effort
+	}
+}
+
 // WithFrequencyPenalty sets the frequency penalty for the Ask request.
 func WithFrequencyPenalty(fp float64) AskOption {
 	return func(ac *AskConfig) { ac.FrequencyPenalty = &fp }

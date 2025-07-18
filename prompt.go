@@ -102,7 +102,7 @@ func (m *manager[Context]) Execute(name string, args Render[Context]) (string, e
 	return buf.String(), nil
 }
 
-func toJSON(v interface{}) string {
+func toJSONwSchema(v interface{}) string {
 	jsonBytes, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return "Error converting to JSON: " + err.Error()
@@ -125,6 +125,20 @@ func toJSON(v interface{}) string {
 `+"```", string(jsonBytes), string(jsonSchemaBytes))
 }
 
+func toJSON(v interface{}) string {
+	jsonBytes, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return "Error converting to JSON: " + err.Error()
+	}
+
+	return fmt.Sprintf(`
+**JSON Values:**
+`+"```"+`
+%s
+`+"```", string(jsonBytes))
+}
+
 var funcMap = template.FuncMap{
-	"tojson": toJSON,
+	"toJSON":        toJSON,
+	"toJSONwSchema": toJSONwSchema,
 }

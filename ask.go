@@ -27,6 +27,7 @@ type AskConfig struct {
 	Model            string
 	Temperature      *float64 // Pointer to distinguish between not set and set to 0.0
 	MaxTokens        *int64   // Pointer to distinguish between not set and set to 0
+	ReasoningEffort  *string
 	FrequencyPenalty *float64 // Pointer
 	PresencePenalty  *float64 // Pointer
 	TopP             *float64 // Pointer
@@ -218,6 +219,9 @@ aa:
 func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 	if cfg.MaxTokens != nil {
 		params.MaxTokens = param.NewOpt(*cfg.MaxTokens)
+	}
+	if cfg.ReasoningEffort != nil {
+		params.ReasoningEffort = shared.ReasoningEffort(*cfg.ReasoningEffort)
 	}
 	if cfg.Temperature != nil {
 		params.Temperature = param.NewOpt(*cfg.Temperature)

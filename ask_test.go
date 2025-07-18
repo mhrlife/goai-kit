@@ -289,3 +289,20 @@ You can call the "get_city_id" tool to get the ID and "another" ID of a city bas
 	require.NoError(t, err)
 	fmt.Println(*out)
 }
+
+func TestWithGeminiReasoningEffort(t *testing.T) {
+	goaiClient := NewClient(
+		WithDefaultModel("google/gemini-2.5-flash"),
+		WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+		WithBaseURL(os.Getenv("OPENROUTER_API_BASE")),
+		WithLogLevel(slog.LevelDebug),
+	)
+
+	out, err := Ask[string](context.Background(), goaiClient,
+		WithPrompt("What is the capital of France?"),
+		WithReasoningEffort("low"),
+	)
+
+	require.NoError(t, err)
+	require.Contains(t, strings.ToLower(*out), "paris")
+}
