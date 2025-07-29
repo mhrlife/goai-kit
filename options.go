@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/openai/openai-go/option"
 	"log/slog"
+	"strings"
 )
 
 // ===== ASK OPTIONS ===== //
@@ -160,7 +161,7 @@ func WithAPIKey(apiKey string) ClientOption {
 // WithBaseURL sets the base URL for the lfClient.
 func WithBaseURL(baseURL string) ClientOption {
 	return func(c *Config) {
-		c.ApiBase = baseURL
+		c.ApiBase = strings.TrimSpace(baseURL)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 )
 
 // LoggingMiddleware creates a middleware function that logs OpenAI API requests and responses.
@@ -63,7 +64,7 @@ func LoggingMiddleware(logger *slog.Logger, level slog.Level) option.Middleware 
 					if len(bodyString) > 1024 { // Log first 1KB
 						bodyString = bodyString[:1024] + "..."
 					}
-					logger.Debug("OpenAI Response Body", slog.String("body", bodyString))
+					logger.Debug("OpenAI Response Body", slog.String("body", strings.TrimSpace(bodyString)))
 					resp.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 				}
 			}
