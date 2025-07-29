@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/henomis/langfuse-go"
+	"github.com/openai/openai-go/responses"
+	"github.com/stretchr/testify/require"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -22,20 +25,27 @@ func TestDeepResearch(t *testing.T) {
 		WithPlugin(LangfusePlugin(langfuseClient)),
 	)
 
-	result, err := Task[string](
+	type Output struct {
+		Found  bool
+		Result string
+	}
+	out, _, err := DeepResearch[Output](
 		ctx,
 		client,
 		TaskConfig{
 			Instructions: "you *MUST* only use the mcp to answer the question.",
 			Prompt:       "What is the capital of France in your random world?",
+			MCPServers: []responses.ToolMcpParam{
+				NewApprovedMCPServer(
+					"capitals",
+					"https://b9e32020e949.ngrok-free.app/default/sse",
+				),
+			},
 		},
 	)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("==========================")
-	fmt.Println(jsonMarshal(result.Output))
+	require.NoError(t, err)
+	require.Equal(t, true, out.Found)
+	require.Equal(t, "tehran", strings.ToLower(out.Result))
 }
 
 func jsonMarshal(a any) string {
