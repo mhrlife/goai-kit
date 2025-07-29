@@ -327,6 +327,96 @@ func main() {
 }
 ```
 
+## Deep Research Support (Experimental)
+
+Under development. Currently supports OpenAI o3 and o4-mini deep research tasks with structured output (using some tricks), and includes an OpenAI Deep Research compatible MCP server that has been tested.
+
+### MCP Server Example
+
+Use the following example (`examples/mcp/main.go`) to start an MCP server locally. You can expose it via ngrok:
+
+```go
+package main
+
+import (
+    goaikit "github.com/mhrlife/goai-kit"
+    "log/slog"
+)
+
+func main() {
+    s1, err := goaikit.NewOpenAIDeepResearchMCPServer(
+        "capitals",
+        "v0.0.1",
+        goaikit.OpenAISearch{
+            Description: "search for countries",
+            Exec: func(query string) ([]goaikit.OpenAISearchResult, error) {
+                slog.Info("searching for countries", "query", query)
+                return []goaikit.OpenAISearchResult{
+                    {ID: "iran", Title: "Iran"},
+                    {ID: "france", Title: "France"},
+                }, nil
+            },
+        },
+        goaikit.OpenAIFetch{
+            Description: "get the country info",
+            Exec: func(id string) (*goaikit.OpenAISearchResult, error) {
+                if id == "iran" {
+                    return &goaikit.OpenAISearchResult{ID: "iran", Title: "Iran", Text: "Iran is a country in Western Asia.", URL: "https://en.wikipedia.org/wiki/Iran"}, nil
+                } else if id == "france" {
+                    return &goaikit.OpenAISearchResult{ID: "france", Title: "France", Text: "Capital of france is Tehran in this world", URL: "https://en.wikipedia.org/wiki/France"}, nil
+                }
+                return nil, nil
+            },
+        },
+    )
+    if err != nil {
+        slog.Error("failed to create MCP server", "error", err)
+        return
+    }
+    if err := goaikit.StartSSEServer(s1, ":8082"); err != nil {
+        slog.Error("failed to start SSE server", "error", err)
+    }
+}
+```
+
+Run with ngrok:
+
+```bash
+ngrok http 8082
+```
+
+### Deep Research Usage Example
+
+call `DeepResearch` with the MCP server URL:
+
+```go
+ctx := context.Background()
+client := goaikit.NewClient(
+    goaikit.WithBaseURL(os.Getenv("OPENAI_API_BASE")),
+    goaikit.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+    goaikit.WithDefaultModel("o4-mini-deep-research"),
+    goaikit.WithPlugin(goaikit.LangfusePlugin(langfuse.New(ctx))),
+)
+type Output struct {
+    Found  bool
+    Result string
+}
+out, _, err := goaikit.DeepResearch[Output](
+    ctx,
+    client,
+    goaikit.TaskConfig{
+        Instructions: "you *MUST* only use the mcp to answer the question.",
+        Prompt:       "What is the capital of France in your random world?",
+        MCPServers: []responses.ToolMcpParam{
+            goaikit.NewApprovedMCPServer(
+                "capitals",
+                "https://<your-ngrok-url>/default/sse",
+            ),
+        },
+    },
+)
+```
+
 ## Advanced Usage
 
 ### Using Different Providers
