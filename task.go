@@ -48,6 +48,7 @@ Final answer's output schema must follow this json schema:
 	}
 
 	raw, err := client.client.Responses.New(ctx, responses.ResponseNewParams{
+		Background:   param.NewOpt(false),
 		Instructions: param.NewOpt(config.Instructions),
 		Input: responses.ResponseNewParamsInputUnion{
 			OfString: param.NewOpt(config.Prompt),
