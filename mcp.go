@@ -262,7 +262,7 @@ func StartSSEServerWithRoutes(addr string, routes ...ServerRoute) error {
 		)
 
 		sseEndpointPath := basePath + "/sse"
-		mux.Handle("/default/sse", LogHTTP(sseServer.SSEHandler()))
+		mux.Handle("/default/sse", sseServer.SSEHandler())
 
 		messageEndpointPath := basePath + "/message"
 		mux.Handle(messageEndpointPath, sseServer.MessageHandler())
