@@ -53,7 +53,7 @@ Final answer's output schema must follow this json schema:
 		Input: responses.ResponseNewParamsInputUnion{
 			OfString: param.NewOpt(config.Prompt),
 		},
-		User:        param.NewOpt(config.User),
+		Store:       param.NewOpt(false),
 		ServiceTier: responses.ResponseNewParamsServiceTierDefault,
 		Model:       config.OverrideModel,
 		Tools: lo.Map[responses.ToolMcpParam, responses.ToolUnionParam](
