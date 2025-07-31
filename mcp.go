@@ -1,12 +1,18 @@
 package goaikit
 
 import (
+	"bufio"
+	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"gopkg.in/yaml.v3"
+	"log"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -115,20 +121,22 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool AITool) error
 				return nil, fmt.Errorf("tool execution failed: %w", err)
 			}
 
-			resultJSON, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal result: %w", err)
-			}
+			stringResult := ""
+			switch result.(type) {
+			case string:
+				stringResult = result.(string)
+			default:
+				yamlMarshalled, err := yaml.Marshal(result)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal result: %w", err)
+				}
 
-			// Check if the tool requires structured output only
-			if info.ForceMCPStructuredOutput {
-				return &mcp.CallToolResult{
-					StructuredContent: result,
-				}, nil
+				stringResult = string(yamlMarshalled)
+
 			}
 
 			return &mcp.CallToolResult{
-				Content:           []mcp.Content{mcp.NewTextContent(string(resultJSON))},
+				Content:           []mcp.Content{mcp.NewTextContent(stringResult)},
 				StructuredContent: result,
 			}, nil
 		},
@@ -254,7 +262,7 @@ func StartSSEServerWithRoutes(addr string, routes ...ServerRoute) error {
 		)
 
 		sseEndpointPath := basePath + "/sse"
-		mux.Handle(sseEndpointPath, sseServer.SSEHandler())
+		mux.Handle("/default/sse", LogHTTP(sseServer.SSEHandler()))
 
 		messageEndpointPath := basePath + "/message"
 		mux.Handle(messageEndpointPath, sseServer.MessageHandler())
@@ -319,4 +327,64 @@ func StartSSEServer(mcpServer *server.MCPServer, addr string) error {
 		Path:   "/default",
 		Server: mcpServer,
 	})
+}
+
+/// -------------------------------------------------
+/// -------------------------------------------------
+/// -------------------------------------------------
+
+type loggedWriter struct {
+	http.ResponseWriter
+	status int
+	buf    *bytes.Buffer
+}
+
+func (lw *loggedWriter) WriteHeader(code int) {
+	lw.status = code
+	lw.ResponseWriter.WriteHeader(code)
+}
+func (lw *loggedWriter) Write(p []byte) (int, error) {
+	fmt.Println(base64.StdEncoding.EncodeToString(p))
+	lw.buf.Write(p)                   // capture
+	return lw.ResponseWriter.Write(p) // forward
+}
+
+func LogHTTP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lw := &loggedWriter{ResponseWriter: w, buf: &bytes.Buffer{}}
+		next.ServeHTTP(lw, r)
+
+		// Dump AFTER the request finishes; remove or move if you need live logs.
+		log.Printf("\n---- %s %s -> %d ----\n%s\n",
+			r.Method, r.URL.Path, lw.status, lw.buf.String())
+	})
+}
+
+func (l *loggedWriter) Flush() {
+	if f, ok := l.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func (l *loggedWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := l.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, fmt.Errorf("hijacker not supported")
+}
+
+func (l *loggedWriter) CloseNotify() <-chan bool {
+	if c, ok := l.ResponseWriter.(http.CloseNotifier); ok {
+		return c.CloseNotify()
+	}
+	ch := make(chan bool, 1)
+	close(ch)
+	return ch
+}
+
+func (l *loggedWriter) Push(target string, opts *http.PushOptions) error {
+	if p, ok := l.ResponseWriter.(http.Pusher); ok {
+		return p.Push(target, opts)
+	}
+	return http.ErrNotSupported
 }

@@ -49,11 +49,10 @@ func (t *Tool[ToolArgs]) Run(ctx *ToolContext, argsJson string) (any, error) {
 }
 
 type ToolInfo struct {
-	ID                       string
-	Name                     string
-	Description              string
-	JSONSchema               map[string]any
-	ForceMCPStructuredOutput bool
+	ID          string
+	Name        string
+	Description string
+	JSONSchema  map[string]any
 }
 
 type AITool interface {
