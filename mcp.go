@@ -120,6 +120,13 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool AITool) error
 				return nil, fmt.Errorf("failed to marshal result: %w", err)
 			}
 
+			// Check if the tool requires structured output only
+			if info.ForceMCPStructuredOutput {
+				return &mcp.CallToolResult{
+					StructuredContent: result,
+				}, nil
+			}
+
 			return &mcp.CallToolResult{
 				Content:           []mcp.Content{mcp.NewTextContent(string(resultJSON))},
 				StructuredContent: result,
