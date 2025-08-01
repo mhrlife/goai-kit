@@ -104,6 +104,10 @@ func WithRetries(retries uint) AskOption {
 	return func(ac *AskConfig) { ac.Retries = retries }
 }
 
+func WithParallelToolUse() AskOption {
+	return func(ac *AskConfig) { ac.ParallelToolUse = true }
+}
+
 func WithExtraFields(fields map[string]any) AskOption {
 	return func(config *AskConfig) {
 		config.ExtraFields = fields

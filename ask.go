@@ -41,6 +41,7 @@ type AskConfig struct {
 	// AskSpecificRequestOptions are openai-go lfClient options specific to this Ask call.
 	AskSpecificRequestOptions []option.RequestOption
 	Retries                   uint // Number of retries for the request
+	ParallelToolUse            bool // Enable parallel tool calls
 
 	// Plugin Inputs
 	GenerationName string
@@ -295,6 +296,8 @@ func applyAskConfig(cfg *AskConfig, params *openai.ChatCompletionNewParams) {
 		}
 
 		params.Tools = toolParams
-		params.ParallelToolCalls = param.NewOpt(true)
+		if cfg.ParallelToolUse {
+		    params.ParallelToolCalls = param.NewOpt(true)
+		}
 	}
 }
