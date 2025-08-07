@@ -165,6 +165,13 @@ func WithTrace[T any](
 	call func(ctx context.Context) (*T, error),
 	modifier ...TraceModifier[T],
 ) (*T, error) {
+	_, ok := ctx.Value(langfuseTraceIDKey{}).(string)
+	if ok {
+		c.logger.Debug("LangFuse trace already exists, skipping trace creation")
+
+		return call(ctx)
+	}
+	
 	if c.config.lf == nil {
 		c.logger.Debug("LangFuse client not configured, skipping trace")
 
