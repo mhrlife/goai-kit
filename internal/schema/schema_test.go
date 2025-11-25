@@ -1,4 +1,4 @@
-package goaikit
+package schema
 
 import (
 	"reflect"

@@ -1,4 +1,4 @@
-package goaikit
+package callback
 
 import (
 	"context"

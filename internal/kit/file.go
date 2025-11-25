@@ -1,4 +1,4 @@
-package goaikit
+package kit
 
 import (
 	"encoding/base64"

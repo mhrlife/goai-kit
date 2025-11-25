@@ -1,4 +1,4 @@
-package goaikit
+package kit
 
 import (
 	"log/slog"
@@ -11,7 +11,7 @@ import (
 type Client struct {
 	client openai.Client
 	config Config
-	logger *slog.Logger // Add a dedicated logger instance
+	Logger *slog.Logger // Add a dedicated Logger instance
 }
 
 // ClientOption is a function that configures a Client.
@@ -68,6 +68,6 @@ func NewClient(opts ...ClientOption) *Client {
 	return &Client{
 		client: openai.NewClient(c.RequestOptions...),
 		config: c,
-		logger: logger, // Assign the dedicated logger
+		Logger: logger, // Assign the dedicated Logger
 	}
 }

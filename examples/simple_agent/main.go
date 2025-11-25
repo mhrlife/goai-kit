@@ -6,25 +6,26 @@ import (
 	"log"
 	"os"
 
-	goaikit "github.com/mhrlife/goai-kit"
-	"github.com/mhrlife/goai-kit/tracing"
+	"github.com/mhrlife/goai-kit/internal/callback"
+	"github.com/mhrlife/goai-kit/internal/kit"
+	"github.com/mhrlife/goai-kit/internal/tracing"
 )
 
-var _ goaikit.ToolExecutor = &AverageNumbersTool{}
+var _ kit.ToolExecutor = &AverageNumbersTool{}
 
 type AverageNumbersTool struct {
-	goaikit.BaseTool
+	kit.BaseTool
 	Numbers []float64 `json:"numbers" jsonschema:"description=List of numbers to calculate average"`
 }
 
-func (t *AverageNumbersTool) AgentToolInfo() goaikit.AgentToolInfo {
-	return goaikit.AgentToolInfo{
+func (t *AverageNumbersTool) AgentToolInfo() kit.AgentToolInfo {
+	return kit.AgentToolInfo{
 		Name:        "average_numbers",
 		Description: "Calculate the average of a list of numbers.",
 	}
 }
 
-func (t *AverageNumbersTool) Execute(ctx *goaikit.Context) (any, error) {
+func (t *AverageNumbersTool) Execute(ctx *kit.Context) (any, error) {
 	if len(t.Numbers) == 0 {
 		return map[string]interface{}{"average": 0.0}, nil
 	}
@@ -54,25 +55,25 @@ func main() {
 	// Ensure tracer is flushed before exit
 	defer tracer.FlushOrPanic()
 
-	// 2. Create goaikit client
-	client := goaikit.NewClient(
-		goaikit.WithAPIKey(os.Getenv("LLM_COURSE_OPENROUTER_API_KEY")),
-		goaikit.WithBaseURL("https://openrouter.ai/api/v1"),
-		goaikit.WithDefaultModel("openai/gpt-4o-mini"),
+	// 2. Create kit client
+	client := kit.NewClient(
+		kit.WithAPIKey(os.Getenv("LLM_COURSE_OPENROUTER_API_KEY")),
+		kit.WithBaseURL("https://openrouter.ai/api/v1"),
+		kit.WithDefaultModel("openai/gpt-4o-mini"),
 	)
 
 	// Create agent with tools
-	agent := goaikit.CreateAgent(
+	agent := kit.CreateAgent(
 		client,
 
 		&AverageNumbersTool{},
-	).WithCallbacks(goaikit.NewLangfuseCallback(goaikit.LangfuseCallbackConfig{
+	).WithCallbacks(callback.NewLangfuseCallback(callback.LangfuseCallbackConfig{
 		Tracer:      tracer.Tracer(),
-		ServiceName: "goaikit-simple-agent",
+		ServiceName: "kit-simple-agent",
 	}))
 	fmt.Println("Running agent with tracing...")
 
-	result, err := agent.Invoke(context.Background(), goaikit.InvokeConfig{
+	result, err := agent.Invoke(context.Background(), kit.InvokeConfig{
 		Prompt: "What is the average of the numbers 10, 20, 30, 40, and 50?",
 	})
 	if err != nil {

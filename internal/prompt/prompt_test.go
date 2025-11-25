@@ -1,4 +1,4 @@
-package goaikit
+package prompt
 
 import (
 	"embed"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed fixture/template/**.tpl
+//go:embed fixture/**.tpl
 var tplFS embed.FS
 
 func TestRender(t *testing.T) {

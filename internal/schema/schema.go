@@ -1,4 +1,4 @@
-package goaikit
+package schema
 
 import (
 	"encoding/json"
@@ -28,7 +28,7 @@ func InferJSONSchema(x any) (s *jsonschema.Schema) {
 	return s
 }
 
-func SchemaAsMap(s *jsonschema.Schema) map[string]any {
+func asMap(s *jsonschema.Schema) map[string]any {
 	jsb, err := s.MarshalJSON()
 	if err != nil {
 		log.Panicf("failed to marshal schema: %v", err)
@@ -49,6 +49,6 @@ func SchemaAsMap(s *jsonschema.Schema) map[string]any {
 
 func MarshalToSchema(x any) map[string]any {
 	s := InferJSONSchema(x)
-	m := SchemaAsMap(s)
+	m := asMap(s)
 	return m
 }

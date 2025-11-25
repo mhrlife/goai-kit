@@ -1,4 +1,4 @@
-package goaikit
+package mcp
 
 import (
 	"bufio"
@@ -16,10 +16,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/mhrlife/goai-kit/internal/kit"
 	"gopkg.in/yaml.v3"
 )
 
-func NewMCPServer(client *Client, name, version string, tools ...ToolExecutor) (*server.MCPServer, error) {
+func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExecutor) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		name,
 		version,
@@ -28,7 +29,7 @@ func NewMCPServer(client *Client, name, version string, tools ...ToolExecutor) (
 
 	for _, tool := range tools {
 		if err := addGenericToolToMCP(client, s, tool); err != nil {
-			schema := BuildToolSchema(tool)
+			schema := kit.BuildToolSchema(tool)
 			client.logger.Error("Failed to add tool",
 				"tool_name", schema.ID,
 				"error", err,

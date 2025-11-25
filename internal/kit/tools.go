@@ -1,8 +1,10 @@
-package goaikit
+package kit
 
 import (
 	"reflect"
 	"strings"
+
+	"github.com/mhrlife/goai-kit/internal/schema"
 )
 
 // AgentToolInfo contains metadata about a tool (renamed to avoid conflict with existing ToolInfo)
@@ -87,6 +89,6 @@ func BuildToolSchema(tool ToolExecutor) ToolSchema {
 		Name:        info.Name,
 		ID:          toolID,
 		Description: info.Description,
-		JSONSchema:  MarshalToSchema(tool),
+		JSONSchema:  schema.MarshalToSchema(tool),
 	}
 }

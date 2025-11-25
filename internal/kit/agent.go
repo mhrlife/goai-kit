@@ -1,4 +1,4 @@
-package goaikit
+package kit
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/mhrlife/goai-kit/internal/callback"
+	"github.com/mhrlife/goai-kit/internal/schema"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
@@ -18,7 +20,7 @@ type Agent[Output any] struct {
 	tools         map[string]ToolExecutor // toolID -> ToolExecutor
 	schemas       map[string]ToolSchema   // toolID -> ToolSchema
 	model         string
-	callbacks     []AgentCallback
+	callbacks     []callback.AgentCallback
 	maxIterations int
 	temperature   *float64
 }
@@ -32,7 +34,7 @@ type InvokeConfig struct {
 	Messages []openai.ChatCompletionMessageParamUnion
 
 	// Callbacks to be notified of agent lifecycle events
-	Callbacks []AgentCallback
+	Callbacks []callback.AgentCallback
 
 	// ParentRunID for nested agent calls (optional)
 	ParentRunID *string
@@ -55,9 +57,9 @@ func CreateAgentWithOutput[Output any](client *Client, tools ...ToolExecutor) *A
 	schemaMap := make(map[string]ToolSchema)
 
 	for _, tool := range tools {
-		schema := BuildToolSchema(tool)
-		toolMap[schema.ID] = tool
-		schemaMap[schema.ID] = schema
+		toolSchema := BuildToolSchema(tool)
+		toolMap[toolSchema.ID] = tool
+		schemaMap[toolSchema.ID] = toolSchema
 	}
 
 	model := "gpt-4o"
@@ -70,7 +72,7 @@ func CreateAgentWithOutput[Output any](client *Client, tools ...ToolExecutor) *A
 		tools:         toolMap,
 		schemas:       schemaMap,
 		model:         model,
-		callbacks:     []AgentCallback{},
+		callbacks:     []callback.AgentCallback{},
 		maxIterations: 10,
 	}
 }
@@ -82,7 +84,7 @@ func (a *Agent[Output]) WithModel(model string) *Agent[Output] {
 }
 
 // WithCallbacks sets the default callbacks for the agent
-func (a *Agent[Output]) WithCallbacks(callbacks ...AgentCallback) *Agent[Output] {
+func (a *Agent[Output]) WithCallbacks(callbacks ...callback.AgentCallback) *Agent[Output] {
 	a.callbacks = callbacks
 	return a
 }
@@ -108,12 +110,12 @@ func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output
 	allCallbacks := a.mergeCallbacks(config.Callbacks)
 
 	// Create callback manager
-	cbManager := newCallbackManager(allCallbacks, config.ParentRunID)
+	cbManager := callback.NewManager(allCallbacks, config.ParentRunID)
 
 	// Build messages
 	messages, err := a.buildMessages(config)
 	if err != nil {
-		cbManager.onError(err, "run")
+		cbManager.OnError(err, "run")
 		return zero, err
 	}
 
@@ -126,7 +128,7 @@ func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output
 	if config.Prompt == "" {
 		input = "messages"
 	}
-	cbManager.onRunStart(a.model, input, hasOutputClass)
+	cbManager.OnRunStart(a.model, input, hasOutputClass)
 
 	// Determine max iterations
 	maxIter := a.maxIterations
@@ -137,19 +139,19 @@ func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output
 	// Execute the agent loop
 	result, iterations, err := a.executeLoop(ctx, messages, cbManager, maxIter)
 	if err != nil {
-		cbManager.onError(err, "run")
+		cbManager.OnError(err, "run")
 		return zero, err
 	}
 
 	// Trigger OnRunEnd
-	cbManager.onRunEnd(result, iterations)
+	cbManager.OnRunEnd(result, iterations)
 
 	return result, nil
 }
 
 // mergeCallbacks merges invoke and agent callbacks, prioritizing invoke callbacks
-func (a *Agent[Output]) mergeCallbacks(invokeCallbacks []AgentCallback) []AgentCallback {
-	allCallbacks := make([]AgentCallback, 0)
+func (a *Agent[Output]) mergeCallbacks(invokeCallbacks []callback.AgentCallback) []callback.AgentCallback {
+	allCallbacks := make([]callback.AgentCallback, 0)
 	allCallbacks = append(allCallbacks, invokeCallbacks...)
 	seenCallbackNames := map[string]struct{}{}
 	for _, cb := range invokeCallbacks {
@@ -192,7 +194,7 @@ func (a *Agent[Output]) buildMessages(config InvokeConfig) ([]openai.ChatComplet
 func (a *Agent[Output]) executeLoop(
 	ctx context.Context,
 	messages []openai.ChatCompletionMessageParamUnion,
-	cbManager *callbackManager,
+	cbManager *callback.Manager,
 	maxIterations int,
 ) (Output, int, error) {
 	var zero Output
@@ -200,12 +202,12 @@ func (a *Agent[Output]) executeLoop(
 
 	// Convert tool schemas to OpenAI tool definitions
 	tools := make([]openai.ChatCompletionToolParam, 0, len(a.schemas))
-	for _, schema := range a.schemas {
+	for _, toolSchema := range a.schemas {
 		tools = append(tools, openai.ChatCompletionToolParam{
 			Function: shared.FunctionDefinitionParam{
-				Name:        schema.Name,
-				Description: param.NewOpt(schema.Description),
-				Parameters:  schema.JSONSchema,
+				Name:        toolSchema.Name,
+				Description: param.NewOpt(toolSchema.Description),
+				Parameters:  toolSchema.JSONSchema,
 				Strict:      param.NewOpt(true),
 			},
 		})
@@ -215,7 +217,7 @@ func (a *Agent[Output]) executeLoop(
 		iteration++
 
 		// Trigger OnGenerationStart
-		cbManager.onGenerationStart(iteration, messages, a.model)
+		cbManager.OnGenerationStart(iteration, messages, a.model)
 
 		// Build request params
 		params := openai.ChatCompletionNewParams{
@@ -236,13 +238,13 @@ func (a *Agent[Output]) executeLoop(
 		var outputType Output
 		if !isStringType(outputType) {
 			// Add response format for structured output
-			schema := InferJSONSchema(outputType)
+			outputSchema := schema.InferJSONSchema(outputType)
 			params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
 					JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
 						Strict: param.NewOpt(true),
 						Name:   "response",
-						Schema: schema,
+						Schema: outputSchema,
 					},
 				},
 			}
@@ -251,13 +253,13 @@ func (a *Agent[Output]) executeLoop(
 		// Call OpenAI API
 		completion, err := a.client.client.Chat.Completions.New(ctx, params)
 		if err != nil {
-			cbManager.onError(err, "generation")
+			cbManager.OnError(err, "generation")
 			return zero, iteration, fmt.Errorf("OpenAI API error: %w", err)
 		}
 
 		if len(completion.Choices) == 0 {
 			err := fmt.Errorf("no choices in response")
-			cbManager.onError(err, "generation")
+			cbManager.OnError(err, "generation")
 			return zero, iteration, err
 		}
 
@@ -267,7 +269,7 @@ func (a *Agent[Output]) executeLoop(
 		toolCalls := choice.Message.ToolCalls
 
 		// Trigger OnGenerationEnd
-		cbManager.onGenerationEnd(finishReason, content, toolCalls, &completion.Usage)
+		cbManager.OnGenerationEnd(finishReason, content, toolCalls, &completion.Usage)
 
 		// Add assistant message to history
 		messages = append(messages, choice.Message.ToParam())
@@ -283,7 +285,7 @@ func (a *Agent[Output]) executeLoop(
 			// Parse JSON for structured output
 			var result Output
 			if err := json.Unmarshal([]byte(content), &result); err != nil {
-				cbManager.onError(err, "generation")
+				cbManager.OnError(err, "generation")
 				return zero, iteration, fmt.Errorf("failed to parse output JSON: %w", err)
 			}
 			return result, iteration, nil
@@ -293,7 +295,7 @@ func (a *Agent[Output]) executeLoop(
 		if len(toolCalls) > 0 {
 			toolMessages, err := a.executeToolCalls(ctx, toolCalls, cbManager)
 			if err != nil {
-				cbManager.onError(err, "tool")
+				cbManager.OnError(err, "tool")
 				return zero, iteration, err
 			}
 			messages = append(messages, toolMessages...)
@@ -301,7 +303,7 @@ func (a *Agent[Output]) executeLoop(
 	}
 
 	err := fmt.Errorf("max iterations (%d) reached without completion", maxIterations)
-	cbManager.onError(err, "run")
+	cbManager.OnError(err, "run")
 	return zero, iteration, err
 }
 
@@ -309,7 +311,7 @@ func (a *Agent[Output]) executeLoop(
 func (a *Agent[Output]) executeToolCalls(
 	ctx context.Context,
 	toolCalls []openai.ChatCompletionMessageToolCall,
-	cbManager *callbackManager,
+	cbManager *callback.Manager,
 ) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var toolMessages []openai.ChatCompletionMessageParamUnion
 
@@ -321,17 +323,17 @@ func (a *Agent[Output]) executeToolCalls(
 		// Parse arguments
 		var args map[string]interface{}
 		if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-			cbManager.onToolCallEnd(toolName, args, nil, toolCallID, err)
+			cbManager.OnToolCallEnd(toolName, args, nil, toolCallID, err)
 			return nil, fmt.Errorf("failed to parse tool arguments: %w", err)
 		}
 
 		// Trigger OnToolCallStart
-		cbManager.onToolCallStart(toolName, args, toolCallID)
+		cbManager.OnToolCallStart(toolName, args, toolCallID)
 
 		// Find tool by name in schemas and tools maps
 		var foundToolID string
-		for id, schema := range a.schemas {
-			if schema.Name == toolName {
+		for id, toolSchema := range a.schemas {
+			if toolSchema.Name == toolName {
 				foundToolID = id
 				break
 			}
@@ -339,7 +341,7 @@ func (a *Agent[Output]) executeToolCalls(
 
 		if foundToolID == "" {
 			err := fmt.Errorf("tool not found: %s", toolName)
-			cbManager.onToolCallEnd(toolName, args, nil, toolCallID, err)
+			cbManager.OnToolCallEnd(toolName, args, nil, toolCallID, err)
 			return nil, err
 		}
 
@@ -356,19 +358,19 @@ func (a *Agent[Output]) executeToolCalls(
 
 		// Unmarshal args into the tool copy
 		if err := json.Unmarshal([]byte(toolCall.Function.Arguments), toolCopy); err != nil {
-			cbManager.onToolCallEnd(toolName, args, nil, toolCallID, err)
+			cbManager.OnToolCallEnd(toolName, args, nil, toolCallID, err)
 			return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 		}
 
 		// Create Context wrapper
 		ctxWrapper := &Context{
 			Context: ctx,
-			logger:  a.client.logger,
+			logger:  a.client.Logger,
 		}
 
 		// Execute tool
 		result, err := toolCopy.Execute(ctxWrapper)
-		cbManager.onToolCallEnd(toolName, args, result, toolCallID, err)
+		cbManager.OnToolCallEnd(toolName, args, result, toolCallID, err)
 
 		if err != nil {
 			return nil, fmt.Errorf("tool %s failed: %w", toolName, err)
