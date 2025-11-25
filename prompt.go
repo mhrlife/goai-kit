@@ -44,7 +44,6 @@ func (m *manager[Context]) Load(fileSystem embed.FS) error {
 		}
 		return nil
 	})
-
 	if err != nil {
 		return err
 	}

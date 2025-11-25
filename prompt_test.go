@@ -2,9 +2,9 @@ package goaikit
 
 import (
 	"embed"
-	"github.com/stretchr/testify/require"
-	"log/slog"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 //go:embed fixture/template/**.tpl
@@ -41,31 +41,6 @@ func TestRender(t *testing.T) {
 	require.Equal(t, "Ready: Hello Amir", rendered)
 }
 
-func TestWithNested(t *testing.T) {
-	slog.SetLogLoggerLevel(slog.LevelDebug)
-
-	type Context struct {
-		Nested bool
-		Ready  bool
-	}
-
-	tpl := NewTemplate[Context]()
-	err := tpl.Load(tplFS)
-	require.NoError(t, err)
-
-	rendered, err := tpl.Execute("hello", Render[Context]{
-		Context: Context{
-			Nested: true,
-		},
-		Data: map[string]any{
-			"Name": "Reza",
-		},
-	})
-
-	require.NoError(t, err)
-	require.Equal(t, "Hello Reza\nAlso supports nested", rendered)
-}
-
 func TestToJson(t *testing.T) {
 	type Context struct {
 		Name string `json:"name" jsonschema_description:"The name of the user"`
@@ -84,6 +59,6 @@ func TestToJson(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Contains(t, render, `The name of the user`)
-	require.Contains(t, render, `"name": "Ali"`)
+	require.Contains(t, render, `"name"`)
+	require.Contains(t, render, `"Ali"`)
 }

@@ -2,9 +2,10 @@ package goaikit
 
 import (
 	"encoding/json"
-	"github.com/invopop/jsonschema"
 	"log"
 	"reflect"
+
+	"github.com/invopop/jsonschema"
 )
 
 func InferJSONSchema(x any) (s *jsonschema.Schema) {

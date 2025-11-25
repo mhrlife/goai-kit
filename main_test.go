@@ -1,9 +1,10 @@
 package goaikit
 
 import (
-	"github.com/joho/godotenv"
 	"os"
 	"testing"
+
+	"github.com/joho/godotenv"
 )
 
 func TestMain(m *testing.M) {

@@ -1,3 +1,43 @@
-.aider*
+# IDE & Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# Environment & Config
 .env
-.idea
+.env.local
+.env*.local
+
+# Go
+bin/
+obj/
+*.o
+*.a
+*.so
+.go/
+vendor/
+go.work
+
+# Build & Binaries
+dist/
+build/
+*.exe
+*.dll
+*.dylib
+
+# Test & Coverage
+coverage.out
+coverage.html
+*.test
+*.prof
+
+# Development Tools
+.aider*
+simple_agent
+*.sublime-*
+Thumbs.db
+*.tmp

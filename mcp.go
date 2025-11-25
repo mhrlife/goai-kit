@@ -7,47 +7,19 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
-	"gopkg.in/yaml.v3"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
+
+	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"gopkg.in/yaml.v3"
 )
 
-// OpenAISearchResult is the exact format used by OpenAI's Deep Research search results.
-type OpenAISearchResult struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Text  string `json:"text"`
-	URL   string `json:"url"`
-}
-
-type OpenAISearch struct {
-	Description string
-	Exec        func(query string) ([]OpenAISearchResult, error)
-}
-
-type OpenAIFetch struct {
-	Description string
-	Exec        func(id string) (*OpenAISearchResult, error)
-}
-
-type searchArgs struct {
-	Query string `json:"query"`
-}
-
-type searchResults struct {
-	Results []OpenAISearchResult `json:"results"`
-}
-
-type fetchArgs struct {
-	ID string `json:"id"`
-}
-
-func NewMCPServer(client *Client, name, version string, tools ...AITool) (*server.MCPServer, error) {
+func NewMCPServer(client *Client, name, version string, tools ...ToolExecutor) (*server.MCPServer, error) {
 	s := server.NewMCPServer(
 		name,
 		version,
@@ -56,52 +28,35 @@ func NewMCPServer(client *Client, name, version string, tools ...AITool) (*serve
 
 	for _, tool := range tools {
 		if err := addGenericToolToMCP(client, s, tool); err != nil {
+			schema := BuildToolSchema(tool)
 			client.logger.Error("Failed to add tool",
-				"tool_name", tool.ToolInfo().ID,
+				"tool_name", schema.ID,
 				"error", err,
 			)
 
 			return nil, err
 		}
 
+		schema := BuildToolSchema(tool)
 		client.logger.Info("Added MCP tool",
 			"server_name", name,
-			"tool_name", tool.ToolInfo().ID,
-			"tool_description", tool.ToolInfo().Description,
+			"tool_name", schema.ID,
+			"tool_description", schema.Description,
 		)
 	}
 
 	return s, nil
 }
 
-// NewOpenAIDeepResearchMCPServer creates an MCP server specifically for OpenAI's Deep Research
-func NewOpenAIDeepResearchMCPServer(name, version string, search OpenAISearch, fetch OpenAIFetch) (*server.MCPServer, error) {
-	s := server.NewMCPServer(
-		name,
-		version,
-		server.WithToolCapabilities(false),
-	)
+func addGenericToolToMCP(client *Client, s *server.MCPServer, tool ToolExecutor) error {
+	schema := BuildToolSchema(tool)
 
-	if err := addOpenAISearchTool(s, search); err != nil {
-		return nil, fmt.Errorf("failed to add search tool: %w", err)
-	}
-
-	if err := addOpenAIFetchTool(s, fetch); err != nil {
-		return nil, fmt.Errorf("failed to add fetch tool: %w", err)
-	}
-
-	return s, nil
-}
-
-func addGenericToolToMCP(client *Client, s *server.MCPServer, tool AITool) error {
-	info := tool.ToolInfo()
-
-	schemaJSON, err := json.Marshal(info.JSONSchema)
+	schemaJSON, err := json.Marshal(schema.JSONSchema)
 	if err != nil {
-		return fmt.Errorf("failed to marshal schema for tool %s: %w", info.ID, err)
+		return fmt.Errorf("failed to marshal schema for tool %s: %w", schema.ID, err)
 	}
 
-	mcpTool := mcp.NewToolWithRawSchema(info.ID, info.Description, schemaJSON)
+	mcpTool := mcp.NewToolWithRawSchema(schema.ID, schema.Description, schemaJSON)
 
 	s.AddTool(
 		mcpTool,
@@ -111,12 +66,25 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool AITool) error
 				return nil, fmt.Errorf("failed to marshal arguments: %w", err)
 			}
 
-			toolCtx := &ToolContext{
-				Context: ctx,
-				Client:  client,
+			// Create a copy of the tool struct
+			toolValue := reflect.ValueOf(tool)
+			if toolValue.Kind() == reflect.Ptr {
+				toolValue = toolValue.Elem()
 			}
 
-			result, err := tool.Run(toolCtx, string(argsJSON))
+			// Create new instance and unmarshal args
+			toolCopy := reflect.New(toolValue.Type()).Interface().(ToolExecutor)
+			if err := json.Unmarshal(argsJSON, toolCopy); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
+			}
+
+			// Execute tool
+			ctxWrapper := &Context{
+				Context: ctx,
+				logger:  client.logger,
+			}
+
+			result, err := toolCopy.Execute(ctxWrapper)
 			if err != nil {
 				return nil, fmt.Errorf("tool execution failed: %w", err)
 			}
@@ -139,88 +107,6 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool AITool) error
 				Content:           []mcp.Content{mcp.NewTextContent(stringResult)},
 				StructuredContent: result,
 			}, nil
-		},
-	)
-
-	return nil
-}
-
-func addOpenAISearchTool(s *server.MCPServer, search OpenAISearch) error {
-	searchSchema, err := InferJSONSchema(searchArgs{}).MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("failed to generate search schema: %w", err)
-	}
-
-	searchTool := mcp.NewToolWithRawSchema("search", search.Description, searchSchema)
-
-	s.AddTool(
-		searchTool,
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			query := request.GetString("query", "")
-			if query == "" {
-				return nil, fmt.Errorf("query parameter is required")
-			}
-
-			results, err := search.Exec(query)
-			if err != nil {
-				return nil, fmt.Errorf("search execution failed: %w", err)
-			}
-
-			response := searchResults{
-				Results: results,
-			}
-
-			responseJSON, err := json.Marshal(response)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal search results: %w", err)
-			}
-
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{
-					&mcp.TextContent{
-						Type: "text",
-						Text: string(responseJSON),
-					},
-				},
-				StructuredContent: response,
-			}, nil
-		},
-	)
-
-	return nil
-}
-
-func addOpenAIFetchTool(s *server.MCPServer, fetch OpenAIFetch) error {
-	fetchSchema, err := InferJSONSchema(fetchArgs{}).MarshalJSON()
-	if err != nil {
-		return fmt.Errorf("failed to generate fetch schema: %w", err)
-	}
-
-	fetchTool := mcp.NewToolWithRawSchema("fetch", fetch.Description, fetchSchema)
-
-	s.AddTool(
-		fetchTool,
-		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			id := request.GetString("id", "")
-			if id == "" {
-				return nil, fmt.Errorf("id parameter is required")
-			}
-
-			result, err := fetch.Exec(id)
-			if err != nil {
-				return nil, fmt.Errorf("fetch execution failed: %w", err)
-			}
-
-			if result == nil {
-				return nil, fmt.Errorf("fetch returned nil result")
-			}
-
-			resultJSON, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal fetch result: %w", err)
-			}
-
-			return mcp.NewToolResultText(string(resultJSON)), nil
 		},
 	)
 
@@ -343,6 +229,7 @@ func (lw *loggedWriter) WriteHeader(code int) {
 	lw.status = code
 	lw.ResponseWriter.WriteHeader(code)
 }
+
 func (lw *loggedWriter) Write(p []byte) (int, error) {
 	fmt.Println(base64.StdEncoding.EncodeToString(p))
 	lw.buf.Write(p)                   // capture

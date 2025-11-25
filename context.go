@@ -7,7 +7,6 @@ import (
 
 type Context struct {
 	context.Context
-	config *AskConfig
 	logger *slog.Logger
 }
 

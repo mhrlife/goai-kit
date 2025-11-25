@@ -1,2 +1,2 @@
 This is context:
-{{.Context | tojson}}
+{{.Context | toJSON}}

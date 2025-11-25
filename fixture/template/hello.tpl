@@ -1,1 +1,1 @@
-{{if .Context.Ready}}Ready: {{end}}Hello {{ .Data.Name }}{{if .Context.Nested}}{{template "nested"}}{{end}}
+{{if .Context.Ready}}Ready: {{end}}Hello {{ .Data.Name }}

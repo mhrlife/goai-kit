@@ -1,11 +1,11 @@
 package goaikit
 
 import (
-	"github.com/henomis/langfuse-go"
+	"log/slog"
+	"os"
+
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
-	"log/slog" // Import slog
-	"os"
 )
 
 type Client struct {
@@ -22,13 +22,7 @@ type Config struct {
 	ApiBase        string
 	RequestOptions []option.RequestOption
 	DefaultModel   string
-	LogLevel       slog.Level // Add LogLevel field
-	BeforeRequest  []BeforeRequestHook
-	AfterRequest   []AfterRequestHook
-
-	// Plugin Options
-
-	lf *langfuse.Langfuse
+	LogLevel       slog.Level
 }
 
 // NewClient creates a new goaikit Client with the given options.
@@ -76,26 +70,4 @@ func NewClient(opts ...ClientOption) *Client {
 		config: c,
 		logger: logger, // Assign the dedicated logger
 	}
-}
-
-// applyBeforeRequestHooks applies the BeforeRequest hooks.
-// It returns the modified parameters after applying all hooks.
-func (c *Client) applyBeforeRequestHooks(ctx *Context, params openai.ChatCompletionNewParams) openai.ChatCompletionNewParams {
-	modifiedParams := params
-	for _, hook := range c.config.BeforeRequest {
-		// The hook returns a modified ChatCompletionNewParams
-		modifiedParams = hook(ctx, modifiedParams)
-	}
-	return modifiedParams
-}
-
-// applyAfterRequestHooks applies the AfterRequest hooks.
-// It returns the modified response and error after applying all hooks.
-func (c *Client) applyAfterRequestHooks(ctx *Context, response *openai.ChatCompletion, err error) (*openai.ChatCompletion, error) {
-	modifiedResponse := response
-	modifiedErr := err
-	for _, hook := range c.config.AfterRequest {
-		modifiedResponse, modifiedErr = hook(ctx, modifiedResponse, modifiedErr)
-	}
-	return modifiedResponse, modifiedErr
 }
