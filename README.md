@@ -6,7 +6,7 @@ with minimal boilerplate.
 ## Installation
 
 ```bash
-go get github.com/mhrlife/goai-kit@v0.0.2
+go get github.com/mhrlife/goai-kit@v0.0.3
 ```
 
 ## Features
