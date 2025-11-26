@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/mhrlife/goai-kit/internal/callback"
-	"github.com/mhrlife/goai-kit/internal/schema"
+	"github.com/mhrlife/goai-kit/callback"
+	"github.com/mhrlife/goai-kit/schema"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"

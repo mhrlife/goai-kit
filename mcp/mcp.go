@@ -16,7 +16,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mhrlife/goai-kit/internal/kit"
+	"github.com/mhrlife/goai-kit/kit"
 	"gopkg.in/yaml.v3"
 )
 

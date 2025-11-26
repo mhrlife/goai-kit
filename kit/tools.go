@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/mhrlife/goai-kit/internal/schema"
+	"github.com/mhrlife/goai-kit/schema"
 )
 
 // AgentToolInfo contains metadata about a tool (renamed to avoid conflict with existing ToolInfo)
