@@ -6,7 +6,7 @@ with minimal boilerplate.
 ## Installation
 
 ```bash
-go get github.com/mhrlife/goai-kit@v0.0.1
+go get github.com/mhrlife/goai-kit@v0.0.2
 ```
 
 ## Features
@@ -24,7 +24,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mhrlife/goai-kit/internal/kit"
+	"github.com/mhrlife/goai-kit/kit"
 )
 
 // Define your desired output structure
@@ -65,7 +65,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/mhrlife/goai-kit/internal/kit"
+	"github.com/mhrlife/goai-kit/kit"
 )
 
 func main() {
@@ -100,7 +100,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/mhrlife/goai-kit/internal/kit"
+	"github.com/mhrlife/goai-kit/kit"
 )
 
 // 1. Define your tool by implementing ToolExecutor interface
@@ -167,7 +167,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/mhrlife/goai-kit/internal/kit"
+	"github.com/mhrlife/goai-kit/kit"
 )
 
 type ImageAnalysis struct {
@@ -284,9 +284,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/mhrlife/goai-kit/internal/callback"
-	"github.com/mhrlife/goai-kit/internal/kit"
-	"github.com/mhrlife/goai-kit/internal/tracing"
+	"github.com/mhrlife/goai-kit/callback"
+	"github.com/mhrlife/goai-kit/kit"
+	"github.com/mhrlife/goai-kit/tracing"
 )
 
 // Define your tool (same as before)
