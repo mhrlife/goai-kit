@@ -6,9 +6,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/mhrlife/goai-kit/internal/callback"
-	"github.com/mhrlife/goai-kit/internal/kit"
-	"github.com/mhrlife/goai-kit/internal/tracing"
+	"github.com/mhrlife/goai-kit/callback"
+	"github.com/mhrlife/goai-kit/kit"
+	"github.com/mhrlife/goai-kit/tracing"
 )
 
 var _ kit.ToolExecutor = &AverageNumbersTool{}
