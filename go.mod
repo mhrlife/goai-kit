@@ -1,17 +1,12 @@
 module github.com/mhrlife/goai-kit
 
-go 1.24
+go 1.23.1
 
 require (
-	github.com/avast/retry-go/v4 v4.6.1
 	github.com/google/uuid v1.6.0
-	github.com/henomis/langfuse-go v0.0.3
 	github.com/invopop/jsonschema v0.13.0
-	github.com/joho/godotenv v1.5.1
 	github.com/mark3labs/mcp-go v0.36.0
 	github.com/openai/openai-go v1.11.1
-	github.com/pkg/errors v0.9.1
-	github.com/samber/lo v1.51.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0
@@ -28,7 +23,6 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
-	github.com/henomis/restclientgo v1.2.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
