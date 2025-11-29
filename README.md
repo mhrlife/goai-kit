@@ -194,7 +194,64 @@ func main() {
 }
 ```
 
-### 5. File & Image Uploads
+### 5. Vector Database with Redis
+
+Store and search embeddings using Redis. Perfect for semantic search and retrieval-augmented generation (RAG).
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/mhrlife/goai-kit/embedding"
+	"github.com/mhrlife/goai-kit/kit"
+	"github.com/mhrlife/goai-kit/vectordb"
+	"github.com/redis/go-redis/v9"
+)
+
+func main() {
+	// Create embedding model
+	client := kit.NewClient(kit.WithDefaultModel("gpt-4o-mini"))
+	embeddingModel := embedding.NewOpenAIEmbeddings(client, "text-embedding-3-small")
+
+	// Create vector DB
+	vectorDB := vectordb.NewRedisVectorDB(
+		"my_index",
+		embeddingModel,
+		redis.NewClient(&redis.Options{Addr: "localhost:6379"}),
+	)
+
+	// Create index
+	vectorDB.CreateIndex(context.Background(), vectordb.IndexConfig{
+		Dimensions: 1536,
+		DistanceMetric: "COSINE",
+	})
+
+	// Store documents
+	vectorDB.StoreDocumentsBatch(context.Background(), []vectordb.Document{
+		{ID: "doc1", Content: "Go is a backend language", Meta: map[string]any{"category": "backend"}},
+		{ID: "doc2", Content: "Python is great for data science", Meta: map[string]any{"category": "data"}},
+	})
+
+	// Search
+	results, err := vectorDB.SearchDocuments(context.Background(), vectordb.DocumentSearch{
+		Query: "backend programming",
+		TopK:  2,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, doc := range results {
+		fmt.Printf("Found: %s (score: %s)\n", doc.Content, doc.Score)
+	}
+}
+```
+
+### 6. File & Image Uploads
 
 Send files (PDFs, images) for multimodal analysis with agents.
 
@@ -247,7 +304,7 @@ func main() {
 }
 ```
 
-### 6. Dynamic Prompts with Go Templates
+### 7. Dynamic Prompts with Go Templates
 
 `goai-kit` supports Go's built-in `text/template` engine to create dynamic prompts. This allows you to separate your
 prompt logic from your application code and build complex prompt structures with conditions and loops.
@@ -310,7 +367,7 @@ fmt.Println(prompt)
 // Output: Ready: Hello Amir
 ```
 
-### 7. OTEL Langfuse Integration for Agent Tracing
+### 8. OTEL Langfuse Integration for Agent Tracing
 
 Monitor and debug your agents with OTEL-based tracing using Langfuse. Track agent invocations, tool executions, and
 model calls automatically.
