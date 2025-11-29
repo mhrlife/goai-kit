@@ -14,9 +14,8 @@ type DocumentWithScore struct {
 }
 
 type DocumentSearch struct {
-	Query    string
-	Metadata map[string]any
-	TopK     int
+	Query string
+	TopK  int
 }
 
 type IndexConfig struct {
