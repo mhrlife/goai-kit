@@ -21,16 +21,19 @@ type LangfuseCallback struct {
 	// Span tracking
 	traceSpan             trace.Span
 	rootSpan              trace.Span
+	currentIterationSpan  trace.Span
 	currentGenerationSpan trace.Span
 	toolSpans             map[string]trace.Span
 
 	// Context management - mimicking Python/PHP's attach/detach pattern
-	traceContext    context.Context
-	rootSpanContext context.Context
+	traceContext        context.Context
+	rootSpanContext     context.Context
+	currentIterationCtx context.Context
 
 	// Configuration
 	serviceName string
 	traceID     string
+	iteration   int
 }
 
 // LangfuseCallbackConfig configures the Langfuse callback with OTEL
@@ -64,6 +67,7 @@ func NewLangfuseCallback(config LangfuseCallbackConfig) *LangfuseCallback {
 		serviceName: serviceName,
 		traceID:     config.TraceID,
 		toolSpans:   make(map[string]trace.Span),
+		iteration:   0,
 	}
 
 	// Initialize trace span
@@ -144,6 +148,14 @@ func (lc *LangfuseCallback) OnRunEnd(ctx map[string]interface{}) {
 		return
 	}
 
+	// Close any remaining iteration span
+	if lc.currentIterationSpan != nil {
+		lc.currentIterationSpan.SetStatus(codes.Ok, "")
+		lc.currentIterationSpan.End()
+		lc.currentIterationSpan = nil
+		lc.currentIterationCtx = nil
+	}
+
 	// Set output
 	if output := ctx["output"]; output != nil {
 		outputJSON, _ := json.Marshal(output)
@@ -169,15 +181,40 @@ func (lc *LangfuseCallback) OnRunEnd(ctx map[string]interface{}) {
 	}
 }
 
-// OnGenerationStart creates a generation span
+// OnGenerationStart creates an iteration span with nested generation span
 func (lc *LangfuseCallback) OnGenerationStart(ctx map[string]interface{}) {
 	if lc.rootSpan == nil {
 		return
 	}
 
-	// Start generation span - will automatically use current context (root span context)
-	spanCtx, span := lc.tracer.Start(
+	// Close previous iteration span if it exists (happens when tool calls completed)
+	if lc.currentIterationSpan != nil {
+		lc.currentIterationSpan.SetStatus(codes.Ok, "")
+		lc.currentIterationSpan.End()
+		lc.currentIterationSpan = nil
+		lc.currentIterationCtx = nil
+	}
+
+	// Extract iteration number
+	var iterNum int
+	if iteration, ok := ctx["iteration"].(int); ok {
+		iterNum = iteration
+		lc.iteration = iteration
+	}
+
+	// Start iteration span - child of root span
+	iterationSpanCtx, iterationSpan := lc.tracer.Start(
 		lc.rootSpanContext,
+		fmt.Sprintf("iteration.%d", iterNum),
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+
+	lc.currentIterationSpan = iterationSpan
+	lc.currentIterationCtx = iterationSpanCtx
+
+	// Start generation span - child of iteration span
+	spanCtx, span := lc.tracer.Start(
+		lc.currentIterationCtx,
 		"llm.generation",
 		trace.WithSpanKind(trace.SpanKindClient),
 	)
@@ -185,16 +222,15 @@ func (lc *LangfuseCallback) OnGenerationStart(ctx map[string]interface{}) {
 	lc.currentGenerationSpan = span
 	_ = spanCtx // We don't need to store this as we're not creating nested children
 
-	// Set attributes
+	// Set iteration attributes
+	lc.currentIterationSpan.SetAttributes(attribute.Int("iteration", iterNum))
+
+	// Set generation attributes
 	if model, ok := ctx["model"].(string); ok {
 		span.SetAttributes(
 			attribute.String("langfuse.observation.model.name", model),
 			attribute.String("gen_ai.request.model", model),
 		)
-	}
-
-	if iteration, ok := ctx["iteration"].(int); ok {
-		span.SetAttributes(attribute.Int("iteration", iteration))
 	}
 
 	if messages := ctx["messages"]; messages != nil {
@@ -220,6 +256,9 @@ func (lc *LangfuseCallback) OnGenerationEnd(ctx map[string]interface{}) {
 
 	// Build complete output including tool calls if present
 	output := make(map[string]interface{})
+	hasToolCalls := false
+
+	output["role"] = "assistant"
 
 	if content, ok := ctx["content"].(string); ok && content != "" {
 		output["content"] = content
@@ -227,25 +266,8 @@ func (lc *LangfuseCallback) OnGenerationEnd(ctx map[string]interface{}) {
 
 	// Add tool calls to output if present
 	if toolCalls := ctx["tool_calls"]; toolCalls != nil {
-		if calls, ok := toolCalls.([]openai.ChatCompletionMessageToolCall); ok && len(calls) > 0 {
-			toolCallsData := make([]map[string]interface{}, len(calls))
-			for i, call := range calls {
-				toolCallsData[i] = map[string]interface{}{
-					"id":   call.ID,
-					"type": string(call.Type),
-					"function": map[string]interface{}{
-						"name":      call.Function.Name,
-						"arguments": call.Function.Arguments,
-					},
-				}
-			}
-			output["tool_calls"] = toolCallsData
-
-			lc.currentGenerationSpan.SetAttributes(
-				attribute.Bool("has_tool_calls", true),
-				attribute.Int("tool_calls_count", len(calls)),
-			)
-		}
+		hasToolCalls = true
+		output["tool_calls"] = ctx["tool_calls"]
 	}
 
 	// Set output
@@ -272,20 +294,33 @@ func (lc *LangfuseCallback) OnGenerationEnd(ctx map[string]interface{}) {
 	lc.currentGenerationSpan.SetStatus(codes.Ok, "")
 	lc.currentGenerationSpan.End()
 	lc.currentGenerationSpan = nil
+
+	// If no tool calls, close the iteration span (iteration is complete)
+	if !hasToolCalls && lc.currentIterationSpan != nil {
+		lc.currentIterationSpan.SetStatus(codes.Ok, "")
+		lc.currentIterationSpan.End()
+		lc.currentIterationSpan = nil
+		lc.currentIterationCtx = nil
+	}
 }
 
 // OnToolCallStart creates a span for tool execution
 func (lc *LangfuseCallback) OnToolCallStart(ctx map[string]interface{}) {
-	if lc.rootSpan == nil {
+	if lc.currentIterationSpan == nil {
 		return
 	}
 
 	toolName, _ := ctx["tool_name"].(string)
 	toolCallID, _ := ctx["tool_call_id"].(string)
 
-	// Start tool span - will automatically use current context (root span context)
+	// Start tool span - child of current iteration span
+	parentCtx := lc.currentIterationCtx
+	if parentCtx == nil {
+		parentCtx = lc.rootSpanContext
+	}
+
 	_, toolSpan := lc.tracer.Start(
-		lc.rootSpanContext,
+		parentCtx,
 		fmt.Sprintf("tool.%s", toolName),
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
@@ -357,6 +392,15 @@ func (lc *LangfuseCallback) OnError(ctx map[string]interface{}) {
 		toolSpan.SetStatus(codes.Error, errMsg)
 		toolSpan.End()
 		delete(lc.toolSpans, toolCallID)
+	}
+
+	// End current iteration span with error
+	if lc.currentIterationSpan != nil {
+		lc.currentIterationSpan.RecordError(err)
+		lc.currentIterationSpan.SetStatus(codes.Error, errMsg)
+		lc.currentIterationSpan.End()
+		lc.currentIterationSpan = nil
+		lc.currentIterationCtx = nil
 	}
 
 	// End root span with error
