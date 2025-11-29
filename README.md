@@ -154,7 +154,47 @@ func main() {
 }
 ```
 
-### 4. File & Image Uploads
+### 4. Text Embeddings
+
+Generate embeddings for text using OpenAI-compatible embedding models.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/mhrlife/goai-kit/embedding"
+	"github.com/mhrlife/goai-kit/kit"
+)
+
+func main() {
+	// Create client
+	client := kit.NewClient(
+		kit.WithAPIKey(os.Getenv("OPENAI_API_KEY")),
+		kit.WithDefaultModel("gpt-4o-mini"),
+	)
+
+	// Create embedding model
+	embeddingModel := embedding.NewOpenAIEmbeddings(client, "text-embedding-3-small")
+
+	// Generate embeddings
+	embeddings, err := embeddingModel.EmbedTexts(context.Background(), []string{
+		"Hello world",
+		"Go is awesome!",
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Generated", len(embeddings), "embeddings")
+	fmt.Println("Each embedding has dimension", len(embeddings[0]))
+}
+```
+
+### 5. File & Image Uploads
 
 Send files (PDFs, images) for multimodal analysis with agents.
 
@@ -207,7 +247,7 @@ func main() {
 }
 ```
 
-### 5. Dynamic Prompts with Go Templates
+### 6. Dynamic Prompts with Go Templates
 
 `goai-kit` supports Go's built-in `text/template` engine to create dynamic prompts. This allows you to separate your
 prompt logic from your application code and build complex prompt structures with conditions and loops.
@@ -270,7 +310,7 @@ fmt.Println(prompt)
 // Output: Ready: Hello Amir
 ```
 
-### 6. OTEL Langfuse Integration for Agent Tracing
+### 7. OTEL Langfuse Integration for Agent Tracing
 
 Monitor and debug your agents with OTEL-based tracing using Langfuse. Track agent invocations, tool executions, and
 model calls automatically.

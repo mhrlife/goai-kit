@@ -71,3 +71,7 @@ func NewClient(opts ...ClientOption) *Client {
 		Logger: logger, // Assign the dedicated Logger
 	}
 }
+
+func (c *Client) GetOpenAI() openai.Client {
+	return c.client
+}
