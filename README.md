@@ -251,6 +251,51 @@ func main() {
 }
 ```
 
+#### Filtered Search
+
+Search with metadata filters to narrow results by category, price range, or other fields:
+
+```go
+// Create index with filterable fields
+vectorDB.CreateIndex(context.Background(), vectordb.IndexConfig{
+	Dimensions:     1536,
+	DistanceMetric: "COSINE",
+	FilterableFields: []vectordb.FilterableField{
+		{Name: "category", Type: vectordb.FilterFieldTypeTag},     // Exact match
+		{Name: "price", Type: vectordb.FilterFieldTypeNumeric},    // Range queries
+	},
+})
+
+// Store documents with metadata
+vectorDB.StoreDocumentsBatch(context.Background(), []vectordb.Document{
+	{ID: "laptop1", Content: "MacBook Pro 16 inch", Meta: map[string]any{"category": "laptop", "price": 2499}},
+	{ID: "phone1", Content: "iPhone 15 Pro", Meta: map[string]any{"category": "phone", "price": 999}},
+})
+
+// Search with filters
+results, _ := vectorDB.SearchDocuments(context.Background(), vectordb.DocumentSearch{
+	Query: "portable device",
+	TopK:  5,
+	Filters: []vectordb.Filter{
+		// Tag filter: exact match
+		{Field: "category", Operator: vectordb.FilterOpEq, Value: "laptop"},
+		// Numeric range filter
+		{Field: "price", Operator: vectordb.FilterOpRange, Value: vectordb.NumericRange{Min: 1000, Max: 3000}},
+	},
+})
+```
+
+**Available filter operators:**
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `FilterOpEq` | Exact tag match | `category = "laptop"` |
+| `FilterOpIn` | Match any in list | `category IN ["laptop", "phone"]` |
+| `FilterOpContains` | Text contains | `description CONTAINS "fast"` |
+| `FilterOpRange` | Numeric range | `price BETWEEN 100 AND 500` |
+| `FilterOpGte` | Greater or equal | `price >= 1000` |
+| `FilterOpLte` | Less or equal | `price <= 500` |
+
 ### 6. File & Image Uploads
 
 Send files (PDFs, images) for multimodal analysis with agents.
