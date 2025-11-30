@@ -27,7 +27,13 @@ func main() {
 
 	if err := vectorDB.CreateIndex(
 		context.Background(),
-		vectordb.IndexConfig{Dimensions: 1536, DistanceMetric: "COSINE"},
+		vectordb.IndexConfig{
+			Dimensions:     1536,
+			DistanceMetric: "COSINE",
+			FilterableFields: []vectordb.FilterableField{
+				{Name: "category", Type: vectordb.FilterFieldTypeTag},
+			},
+		},
 	); err != nil {
 		panic(err)
 	}
@@ -93,4 +99,38 @@ func main() {
 	searchForQuery("I'm looking for a language that is fast and efficient")
 	//ID: go, Score: 0.626137971878, Content: go is a backend language, Meta: map[category:backend]
 	//ID: javascript, Score: 0.597403407097, Content: javascript is a frontend language, Meta: map[category:frontend]
+
+	// Search with filters - only backend languages
+	fmt.Println("-----")
+	fmt.Println("> Filtered search: backend languages only")
+	docs, err := vectorDB.SearchDocuments(context.Background(), vectordb.DocumentSearch{
+		Query: "a fast language",
+		TopK:  3,
+		Filters: []vectordb.Filter{
+			{Field: "category", Operator: vectordb.FilterOpEq, Value: "backend"},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	for _, doc := range docs {
+		fmt.Printf("ID: %s, Score: %s, Content: %s, Meta: %v\n", doc.ID, doc.Score, doc.Content, doc.Meta)
+	}
+
+	// Search with filters - only frontend languages
+	fmt.Println("-----")
+	fmt.Println("> Filtered search: frontend languages only")
+	docs, err = vectorDB.SearchDocuments(context.Background(), vectordb.DocumentSearch{
+		Query: "a fast language",
+		TopK:  3,
+		Filters: []vectordb.Filter{
+			{Field: "category", Operator: vectordb.FilterOpEq, Value: "frontend"},
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	for _, doc := range docs {
+		fmt.Printf("ID: %s, Score: %s, Content: %s, Meta: %v\n", doc.ID, doc.Score, doc.Content, doc.Meta)
+	}
 }

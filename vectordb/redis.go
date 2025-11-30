@@ -45,18 +45,13 @@ func (r *RedisVectorDB) CreateIndex(ctx context.Context, config IndexConfig) err
 		return fmt.Errorf("invalid distance metric: %s (must be L2, COSINE, or IP)", distanceMetric)
 	}
 
-	err := r.client.FTCreate(
-		ctx,
-		r.index,
-		&redis.FTCreateOptions{
-			OnHash: true,
-			Prefix: []interface{}{r.index + ":"},
-		},
-		&redis.FieldSchema{
+	// Build field schemas
+	fields := []*redis.FieldSchema{
+		{
 			FieldName: "content",
 			FieldType: redis.SearchFieldTypeText,
 		},
-		&redis.FieldSchema{
+		{
 			FieldName: "embedding",
 			FieldType: redis.SearchFieldTypeVector,
 			VectorArgs: &redis.FTVectorArgs{
@@ -67,6 +62,42 @@ func (r *RedisVectorDB) CreateIndex(ctx context.Context, config IndexConfig) err
 				},
 			},
 		},
+	}
+
+	// Add filterable fields to schema
+	for _, f := range config.FilterableFields {
+		fieldName := "meta_" + f.Name
+		var schema *redis.FieldSchema
+		switch f.Type {
+		case FilterFieldTypeText:
+			schema = &redis.FieldSchema{
+				FieldName: fieldName,
+				FieldType: redis.SearchFieldTypeText,
+			}
+		case FilterFieldTypeTag:
+			schema = &redis.FieldSchema{
+				FieldName: fieldName,
+				FieldType: redis.SearchFieldTypeTag,
+			}
+		case FilterFieldTypeNumeric:
+			schema = &redis.FieldSchema{
+				FieldName: fieldName,
+				FieldType: redis.SearchFieldTypeNumeric,
+			}
+		default:
+			return fmt.Errorf("unsupported filter field type: %s", f.Type)
+		}
+		fields = append(fields, schema)
+	}
+
+	err := r.client.FTCreate(
+		ctx,
+		r.index,
+		&redis.FTCreateOptions{
+			OnHash: true,
+			Prefix: []interface{}{r.index + ":"},
+		},
+		fields...,
 	).Err()
 
 	if err != nil && !strings.Contains(err.Error(), "Index already exists") {
@@ -105,6 +136,13 @@ func (r *RedisVectorDB) StoreDocument(ctx context.Context, doc Document) error {
 		"content":   doc.Content,
 		"metadata":  string(b),
 		"embedding": encodeFloat32Vector(embedding32),
+	}
+
+	// Add filterable metadata fields with meta_ prefix
+	for _, f := range r.indexConfig.FilterableFields {
+		if val, ok := doc.Meta[f.Name]; ok {
+			docData["meta_"+f.Name] = val
+		}
 	}
 
 	key := fmt.Sprintf("%s:%s", r.index, doc.ID)
@@ -157,6 +195,13 @@ func (r *RedisVectorDB) StoreDocumentsBatch(ctx context.Context, docs []Document
 			"content":   doc.Content,
 			"metadata":  string(b),
 			"embedding": encodeFloat32Vector(embedding32),
+		}
+
+		// Add filterable metadata fields with meta_ prefix
+		for _, f := range r.indexConfig.FilterableFields {
+			if val, ok := doc.Meta[f.Name]; ok {
+				docData["meta_"+f.Name] = val
+			}
 		}
 
 		key := fmt.Sprintf("%s:%s", r.index, doc.ID)
@@ -214,7 +259,13 @@ func (r *RedisVectorDB) SearchDocuments(ctx context.Context, search DocumentSear
 		queryVec32[i] = float32(v)
 	}
 
-	query := fmt.Sprintf("*=>[KNN %d @embedding $vec AS score]", search.TopK)
+	// Build filter prefix
+	filterPrefix := "*"
+	if len(search.Filters) > 0 {
+		filterPrefix = r.buildFilterQuery(search.Filters)
+	}
+
+	query := fmt.Sprintf("%s=>[KNN %d @embedding $vec AS score]", filterPrefix, search.TopK)
 
 	result, err := r.client.FTSearchWithArgs(
 		ctx,
@@ -279,4 +330,93 @@ func encodeFloat32Vector(fs []float32) []byte {
 	}
 
 	return buf
+}
+
+// buildFilterQuery constructs a Redis Search filter query from filters
+func (r *RedisVectorDB) buildFilterQuery(filters []Filter) string {
+	if len(filters) == 0 {
+		return "*"
+	}
+
+	parts := make([]string, 0, len(filters))
+	for _, f := range filters {
+		fieldName := "meta_" + f.Field
+		var part string
+
+		switch f.Operator {
+		case FilterOpEq:
+			// Tag exact match: @field:{value}
+			part = fmt.Sprintf("@%s:{%v}", fieldName, escapeTagValue(f.Value))
+		case FilterOpIn:
+			// Tag in list: @field:{val1|val2|val3}
+			if vals, ok := f.Value.([]string); ok {
+				escaped := make([]string, len(vals))
+				for i, v := range vals {
+					escaped[i] = escapeTagValue(v)
+				}
+				part = fmt.Sprintf("@%s:{%s}", fieldName, strings.Join(escaped, "|"))
+			}
+		case FilterOpContains:
+			// Text contains: @field:value
+			part = fmt.Sprintf("@%s:%v", fieldName, f.Value)
+		case FilterOpRange:
+			// Numeric range: @field:[min max]
+			if rng, ok := f.Value.(NumericRange); ok {
+				part = fmt.Sprintf("@%s:[%v %v]", fieldName, rng.Min, rng.Max)
+			}
+		case FilterOpGte:
+			// Numeric >=: @field:[value +inf]
+			part = fmt.Sprintf("@%s:[%v +inf]", fieldName, f.Value)
+		case FilterOpLte:
+			// Numeric <=: @field:[-inf value]
+			part = fmt.Sprintf("@%s:[-inf %v]", fieldName, f.Value)
+		}
+
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+
+	if len(parts) == 0 {
+		return "*"
+	}
+
+	// Combine with AND (space separated in Redis Search)
+	return "(" + strings.Join(parts, " ") + ")"
+}
+
+// escapeTagValue escapes special characters in tag values for Redis Search
+func escapeTagValue(v interface{}) string {
+	s := fmt.Sprintf("%v", v)
+	// Escape special characters in Redis Search tag syntax
+	replacer := strings.NewReplacer(
+		",", "\\,",
+		".", "\\.",
+		"<", "\\<",
+		">", "\\>",
+		"{", "\\{",
+		"}", "\\}",
+		"[", "\\[",
+		"]", "\\]",
+		"\"", "\\\"",
+		"'", "\\'",
+		":", "\\:",
+		";", "\\;",
+		"!", "\\!",
+		"@", "\\@",
+		"#", "\\#",
+		"$", "\\$",
+		"%", "\\%",
+		"^", "\\^",
+		"&", "\\&",
+		"*", "\\*",
+		"(", "\\(",
+		")", "\\)",
+		"-", "\\-",
+		"+", "\\+",
+		"=", "\\=",
+		"~", "\\~",
+		" ", "\\ ",
+	)
+	return replacer.Replace(s)
 }
