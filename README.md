@@ -9,6 +9,13 @@ with minimal boilerplate.
 go get github.com/mhrlife/goai-kit
 ```
 
+## Jev decisions
+
+Use the standalone [`jev`](jev/README.md) package to evaluate state with typed yes/no,
+choice, and score questions through OpenRouter or TypeSafe. It includes typed answers,
+context cancellation, and HTTP errors with retry classification.
+See the [runnable example](examples/jev/main.go) for all three question types.
+
 ## Features
 
 ### 1. Typed JSON Responses
