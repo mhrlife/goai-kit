@@ -55,8 +55,13 @@ func run(client *jev.Client) error {
 		return err
 	}
 
-	fmt.Printf("urgent:      probability of yes = %.2f\n", urgent.Noul)
-	fmt.Printf("team:        %s (confidence %.2f)\n", team.Choice, team.Confidence)
-	fmt.Printf("frustration: %.2f (confidence %.2f)\n", frustration.Score, frustration.Confidence)
+	// Every answer prints itself, so the fields are there when you want them and
+	// out of the way when you do not.
+	fmt.Println("urgent:     ", urgent)
+	fmt.Println("team:       ", team)
+	fmt.Println("frustration:", frustration)
+
+	// The whole set prints too, one per line and sorted by question id.
+	fmt.Printf("\nall answers:\n%v\n", response.Answers)
 	return nil
 }

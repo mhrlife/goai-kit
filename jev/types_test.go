@@ -2,6 +2,7 @@ package jev
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -150,5 +151,90 @@ func TestResponseAnswer(t *testing.T) {
 	_, err = resp.Answer[NoulAnswer]("team")
 	if err == nil || !strings.Contains(err.Error(), "is a choice answer") {
 		t.Fatalf("unexpected error for type mismatch: %v", err)
+	}
+}
+
+func TestAnswerString(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		answer Answer
+		want   string
+	}{
+		{
+			name:   "noul",
+			answer: NoulAnswer{Noul: 0.923},
+			want:   "noul 0.92",
+		},
+		{
+			name: "choice ranks by probability",
+			answer: ChoiceAnswer{
+				Choice:        "billing",
+				Confidence:    0.8,
+				Probabilities: map[string]float64{"other": 0.05, "billing": 0.75, "technical": 0.2},
+			},
+			want: `choice "billing" (confidence 0.80): billing 0.75, technical 0.20, other 0.05`,
+		},
+		{
+			name:   "choice without a distribution",
+			answer: ChoiceAnswer{Choice: "billing", Confidence: 0.8},
+			want:   `choice "billing" (confidence 0.80)`,
+		},
+		{
+			name: "score keeps rubric order and uses the legend",
+			answer: ScoreAnswer{
+				Score:         1.4,
+				Confidence:    0.6,
+				Legend:        map[string]string{"0": "Calm", "1": "Frustrated", "2": "Very angry"},
+				Probabilities: map[string]float64{"2": 0.5, "0": 0.1, "1": 0.4},
+			},
+			want: "score 1.40 of 2 (confidence 0.60): Calm 0.10, Frustrated 0.40, Very angry 0.50",
+		},
+		{
+			name: "score falls back to level indexes",
+			answer: ScoreAnswer{
+				Score:         0.5,
+				Confidence:    0.5,
+				Probabilities: map[string]float64{"1": 0.5, "0": 0.5},
+			},
+			want: "score 0.50 of 1 (confidence 0.50): 0 0.50, 1 0.50",
+		},
+		{
+			name:   "score without a distribution",
+			answer: ScoreAnswer{Score: 0.5, Confidence: 0.5},
+			want:   "score 0.50 (confidence 0.50)",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.answer.String(); got != tc.want {
+				t.Errorf("String()\n got: %s\nwant: %s", got, tc.want)
+			}
+			// fmt must reach String rather than dumping the struct. Calling
+			// String directly here would delete what this line checks.
+			//nolint:gocritic // redundantSprint: going through fmt is the point.
+			if got := fmt.Sprintf("%v", tc.answer); got != tc.want {
+				t.Errorf("Sprintf(%%v) = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// A whole map of answers prints one per line, sorted and aligned.
+func TestAnswersString(t *testing.T) {
+	answers := Answers{
+		"urgent":      NoulAnswer{Noul: 0.92},
+		"team":        ChoiceAnswer{Choice: "billing", Confidence: 0.8},
+		"frustration": ScoreAnswer{Score: 1.4, Confidence: 0.6},
+	}
+	want := strings.Join([]string{
+		`frustration: score 1.40 (confidence 0.60)`,
+		`team:        choice "billing" (confidence 0.80)`,
+		`urgent:      noul 0.92`,
+	}, "\n")
+	//nolint:gocritic // redundantSprint: going through fmt is the point.
+	if got := fmt.Sprint(answers); got != want {
+		t.Errorf("Sprint(Answers)\n got:\n%s\nwant:\n%s", got, want)
+	}
+	if got := (Answers{}).String(); got != "" {
+		t.Errorf("empty Answers printed %q", got)
 	}
 }

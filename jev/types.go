@@ -9,8 +9,13 @@
 package jev
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -236,9 +241,11 @@ func decodeQuestion(data []byte) (Question, error) {
 	}
 }
 
-// Answer is one of NoulAnswer, ChoiceAnswer or ScoreAnswer.
+// Answer is one of NoulAnswer, ChoiceAnswer or ScoreAnswer. Every answer prints
+// itself on one line, so a whole Answers map can go straight to fmt.Println.
 type Answer interface {
 	json.Marshaler
+	fmt.Stringer
 	Type() Type
 }
 
@@ -248,6 +255,13 @@ type NoulAnswer struct {
 }
 
 func (NoulAnswer) Type() Type { return Noul }
+
+// String reports the probability of yes. It does not round the answer to a
+// verdict, because where the line sits between yes and no is the caller's
+// decision, not this package's.
+func (a NoulAnswer) String() string {
+	return fmt.Sprintf("noul %.2f", a.Noul)
+}
 
 func (a NoulAnswer) MarshalJSON() ([]byte, error) {
 	type fields NoulAnswer
@@ -266,6 +280,33 @@ type ChoiceAnswer struct {
 }
 
 func (ChoiceAnswer) Type() Type { return Choice }
+
+// String reports the pick, its confidence and the whole distribution, most
+// likely option first:
+//
+//	choice "billing" (confidence 0.80): billing 0.75, technical 0.20, other 0.05
+func (a ChoiceAnswer) String() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "choice %q (confidence %.2f)", a.Choice, a.Confidence)
+	options := slices.Collect(maps.Keys(a.Probabilities))
+	// Ranking by probability puts the interesting end first; the name breaks
+	// ties so that the same answer always prints the same way.
+	slices.SortFunc(options, func(x, y string) int {
+		if c := cmp.Compare(a.Probabilities[y], a.Probabilities[x]); c != 0 {
+			return c
+		}
+		return cmp.Compare(x, y)
+	})
+	for i, option := range options {
+		if i == 0 {
+			b.WriteString(": ")
+		} else {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%s %.2f", option, a.Probabilities[option])
+	}
+	return b.String()
+}
 
 func (a ChoiceAnswer) MarshalJSON() ([]byte, error) {
 	type fields ChoiceAnswer
@@ -286,6 +327,45 @@ type ScoreAnswer struct {
 
 func (ScoreAnswer) Type() Type { return Score }
 
+// String reports the weighted score, the top level it is measured against and
+// the distribution across the rubric, in rubric order:
+//
+//	score 1.40 of 2 (confidence 0.60): Calm 0.10, Frustrated 0.40, Very angry 0.50
+//
+// Levels are named from Legend, or by their index when no legend came back.
+func (a ScoreAnswer) String() string {
+	levels := slices.Collect(maps.Keys(a.Probabilities))
+	// The levels are ordered, so keep rubric order rather than ranking them.
+	slices.SortFunc(levels, func(x, y string) int {
+		ix, errX := strconv.Atoi(x)
+		iy, errY := strconv.Atoi(y)
+		if errX != nil || errY != nil {
+			return cmp.Compare(x, y)
+		}
+		return cmp.Compare(ix, iy)
+	})
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "score %.2f", a.Score)
+	if n := len(levels); n > 0 {
+		fmt.Fprintf(&b, " of %d", n-1)
+	}
+	fmt.Fprintf(&b, " (confidence %.2f)", a.Confidence)
+	for i, level := range levels {
+		if i == 0 {
+			b.WriteString(": ")
+		} else {
+			b.WriteString(", ")
+		}
+		name := a.Legend[level]
+		if name == "" {
+			name = level
+		}
+		fmt.Fprintf(&b, "%s %.2f", name, a.Probabilities[level])
+	}
+	return b.String()
+}
+
 func (a ScoreAnswer) MarshalJSON() ([]byte, error) {
 	type fields ScoreAnswer
 	return json.Marshal(struct {
@@ -296,6 +376,25 @@ func (a ScoreAnswer) MarshalJSON() ([]byte, error) {
 
 // Answers is the map returned in a response, keyed by the question ids of the request.
 type Answers map[string]Answer
+
+// String prints one answer per line, sorted by question id and aligned on the
+// ids. Go's own map formatting puts every entry on one line separated by a
+// space, which is unreadable once the answers carry their distributions.
+func (as Answers) String() string {
+	ids := slices.Sorted(maps.Keys(as))
+	width := 0
+	for _, id := range ids {
+		width = max(width, len(id))
+	}
+	var b strings.Builder
+	for i, id := range ids {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "%-*s %v", width+1, id+":", as[id])
+	}
+	return b.String()
+}
 
 func (as *Answers) UnmarshalJSON(data []byte) error {
 	raw, err := rawMap(data)

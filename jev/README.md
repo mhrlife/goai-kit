@@ -74,6 +74,25 @@ go run ./examples/jev
 - `Options` maps choice names to descriptions. An empty description encodes as JSON `null`.
 - Score criteria are ordered level descriptions; provide at least two levels.
 - The config is embedded in the client, so `client.BaseURL` and `client.Model` can still be adjusted before the first call.
+- Every answer has a `String()`, so `fmt.Println(answer)` gives one readable line:
+
+  ```
+  noul 0.92
+  choice "billing" (confidence 0.80): billing 0.75, technical 0.20, other 0.05
+  score 1.40 of 2 (confidence 0.60): Calm 0.10, Frustrated 0.40, Very angry 0.50
+  ```
+
+  A choice ranks the options by probability; a score keeps rubric order and names the
+  levels from its legend. A noul prints the probability of yes without rounding it to
+  a verdict, since where the line sits between yes and no is the caller's decision.
+- `fmt.Println(response.Answers)` prints the whole set, one answer per line, sorted by
+  question id and aligned:
+
+  ```
+  frustration: score 1.40 of 2 (confidence 0.60): Calm 0.10, Frustrated 0.40, Very angry 0.50
+  team:        choice "billing" (confidence 0.80): billing 0.75, technical 0.20, other 0.05
+  urgent:      noul 0.92
+  ```
 - `response.Answer[A]("id")` reads one answer as its concrete type. It errors on an unknown id or a
   type that does not match the question asked, so it never panics. The raw `response.Answers` map is
   still there when you want to range over every answer with a type switch.
