@@ -30,7 +30,7 @@ func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExe
 	for _, tool := range tools {
 		if err := addGenericToolToMCP(client, s, tool); err != nil {
 			schema := kit.BuildToolSchema(tool)
-			client.logger.Error("Failed to add tool",
+			client.Logger.Error("Failed to add tool",
 				"tool_name", schema.ID,
 				"error", err,
 			)
@@ -38,8 +38,8 @@ func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExe
 			return nil, err
 		}
 
-		schema := BuildToolSchema(tool)
-		client.logger.Info("Added MCP tool",
+		schema := kit.BuildToolSchema(tool)
+		client.Logger.Info("Added MCP tool",
 			"server_name", name,
 			"tool_name", schema.ID,
 			"tool_description", schema.Description,
@@ -49,8 +49,8 @@ func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExe
 	return s, nil
 }
 
-func addGenericToolToMCP(client *Client, s *server.MCPServer, tool ToolExecutor) error {
-	schema := BuildToolSchema(tool)
+func addGenericToolToMCP(client *kit.Client, s *server.MCPServer, tool kit.ToolExecutor) error {
+	schema := kit.BuildToolSchema(tool)
 
 	schemaJSON, err := json.Marshal(schema.JSONSchema)
 	if err != nil {
@@ -74,16 +74,13 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool ToolExecutor)
 			}
 
 			// Create new instance and unmarshal args
-			toolCopy := reflect.New(toolValue.Type()).Interface().(ToolExecutor)
+			toolCopy := reflect.New(toolValue.Type()).Interface().(kit.ToolExecutor)
 			if err := json.Unmarshal(argsJSON, toolCopy); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 			}
 
 			// Execute tool
-			ctxWrapper := &Context{
-				Context: ctx,
-				logger:  client.logger,
-			}
+			ctxWrapper := kit.NewContext(ctx, client.Logger)
 
 			result, err := toolCopy.Execute(ctxWrapper)
 			if err != nil {

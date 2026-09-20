@@ -14,7 +14,7 @@ func TestMarshalToSchema(t *testing.T) {
 	marshalled := MarshalToSchema(x{})
 
 	expected := map[string]any{
-		"$id":                  "https://github.com/mhrlife/goai-kit/x",
+		"$id":                  "https://github.com/mhrlife/goai-kit/schema/x",
 		"additionalProperties": false,
 		"properties": map[string]any{
 			"a": map[string]any{
