@@ -63,23 +63,30 @@ func main() {
 	)
 
 	// Create agent with tools
-	agent := kit.CreateAgent(
-		client,
-
-		&AverageNumbersTool{},
-	).WithCallbacks(callback.NewLangfuseCallback(callback.LangfuseCallbackConfig{
+	agent := client.Agent(&AverageNumbersTool{}).WithCallbacks(callback.NewLangfuseCallback(callback.LangfuseCallbackConfig{
 		Tracer:      tracer.Tracer(),
 		ServiceName: "kit-simple-agent",
 	}))
 	fmt.Println("Running agent with tracing...")
 
-	result, err := agent.Invoke(context.Background(), kit.InvokeConfig{
-		Prompt: "What is the average of the numbers 10, 20, 30, 40, and 50?",
-	})
+	result, err := agent.Ask(context.Background(), "What is the average of the numbers 10, 20, 30, 40, and 50?")
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
 
 	fmt.Println("📊 Final Result:")
 	fmt.Println(result)
+
+	// The same agent, with the same tools, callbacks and model, answering into a
+	// struct instead. Before generic methods this needed a second agent.
+	type Summary struct {
+		Average float64  `json:"average" jsonschema:"description=The average that was calculated"`
+		Steps   []string `json:"steps" jsonschema:"description=What the agent did, one line per step"`
+	}
+	summary, err := agent.InvokeSimple[Summary](context.Background(),
+		"What is the average of 10, 20, 30, 40 and 50? Report the average and your steps.")
+	if err != nil {
+		log.Fatalf("Error: %v", err)
+	}
+	fmt.Printf("📦 Typed Result: average=%.2f steps=%v\n", summary.Average, summary.Steps)
 }

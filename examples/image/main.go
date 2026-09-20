@@ -18,9 +18,9 @@ func main() {
 		kit.WithDefaultModel("openai/gpt-4o-mini"),
 	)
 
-	agent := kit.CreateAgent(client)
+	agent := client.Agent()
 
-	result, err := agent.Invoke(context.Background(), kit.InvokeConfig{
+	result, err := agent.Invoke[string](context.Background(), kit.InvokeConfig{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
 				openai.TextContentPart("Describe the following image in 20 words"),

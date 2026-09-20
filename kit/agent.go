@@ -14,8 +14,15 @@ import (
 	"github.com/openai/openai-go/shared"
 )
 
-// Agent represents an AI agent that can execute tasks with tools
-type Agent[Output any] struct {
+// Agent is a configured way of calling a model: a set of tools, a model name, the
+// callbacks to notify and the limits of the tool-calling loop. The output type is
+// not part of it. It belongs to the call, so one agent can answer as a string
+// once and as a struct the next time without being rebuilt:
+//
+//	agent := client.Agent(&SearchTool{}).WithModel("gpt-4o")
+//	text, err := agent.Ask(ctx, "Summarize the release notes")
+//	review, err := agent.InvokeSimple[Review](ctx, "Review this PR")
+type Agent struct {
 	client        *Client
 	tools         map[string]ToolExecutor // toolID -> ToolExecutor
 	schemas       map[string]ToolSchema   // toolID -> ToolSchema
@@ -46,13 +53,9 @@ type InvokeConfig struct {
 	MaxIterations *int
 }
 
-// CreateAgent creates a new agent that returns string output
-func CreateAgent(client *Client, tools ...ToolExecutor) *Agent[string] {
-	return CreateAgentWithOutput[string](client, tools...)
-}
-
-// CreateAgentWithOutput creates a new agent with typed output
-func CreateAgentWithOutput[Output any](client *Client, tools ...ToolExecutor) *Agent[Output] {
+// Agent returns an agent that calls through this client with the given tools.
+// This is the usual entry point; NewAgent does the same thing as a function.
+func (c *Client) Agent(tools ...ToolExecutor) *Agent {
 	toolMap := make(map[string]ToolExecutor)
 	schemaMap := make(map[string]ToolSchema)
 
@@ -63,12 +66,12 @@ func CreateAgentWithOutput[Output any](client *Client, tools ...ToolExecutor) *A
 	}
 
 	model := "gpt-4o"
-	if client.config.DefaultModel != "" {
-		model = client.config.DefaultModel
+	if c.config.DefaultModel != "" {
+		model = c.config.DefaultModel
 	}
 
-	return &Agent[Output]{
-		client:        client,
+	return &Agent{
+		client:        c,
 		tools:         toolMap,
 		schemas:       schemaMap,
 		model:         model,
@@ -77,32 +80,45 @@ func CreateAgentWithOutput[Output any](client *Client, tools ...ToolExecutor) *A
 	}
 }
 
+// NewAgent is client.Agent as a function, for call sites that already hold the
+// client in a variable of their own.
+func NewAgent(client *Client, tools ...ToolExecutor) *Agent {
+	return client.Agent(tools...)
+}
+
 // WithModel sets the model for the agent
-func (a *Agent[Output]) WithModel(model string) *Agent[Output] {
+func (a *Agent) WithModel(model string) *Agent {
 	a.model = model
 	return a
 }
 
 // WithCallbacks sets the default callbacks for the agent
-func (a *Agent[Output]) WithCallbacks(callbacks ...callback.AgentCallback) *Agent[Output] {
+func (a *Agent) WithCallbacks(callbacks ...callback.AgentCallback) *Agent {
 	a.callbacks = callbacks
 	return a
 }
 
 // WithMaxIterations sets the maximum number of tool calling iterations
-func (a *Agent[Output]) WithMaxIterations(max int) *Agent[Output] {
+func (a *Agent) WithMaxIterations(max int) *Agent {
 	a.maxIterations = max
 	return a
 }
 
 // WithTemperature sets the temperature for generation
-func (a *Agent[Output]) WithTemperature(temp float64) *Agent[Output] {
+func (a *Agent) WithTemperature(temp float64) *Agent {
 	a.temperature = &temp
 	return a
 }
 
-// Invoke executes the agent with the given configuration
-func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output, error) {
+// Invoke executes the agent and decodes the final message into Output. Name the
+// type at the call site:
+//
+//	review, err := agent.Invoke[Review](ctx, kit.InvokeConfig{Prompt: p})
+//
+// An Output of string returns the message as it came back. Any other type is
+// sent to the model as a JSON schema in response_format and unmarshaled from
+// the reply, so it must be a shape encoding/json can decode into.
+func (a *Agent) Invoke[Output any](ctx context.Context, config InvokeConfig) (Output, error) {
 	var zero Output
 
 	// merge all callbacks but when there are two callbacks with the same name, only keep
@@ -120,8 +136,7 @@ func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output
 	}
 
 	// Determine if we have a typed output
-	var outputType Output
-	hasOutputClass := !isStringType(outputType)
+	hasOutputClass := !isStringType(zero)
 
 	// Trigger OnRunStart
 	input := config.Prompt
@@ -137,7 +152,7 @@ func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output
 	}
 
 	// Execute the agent loop
-	result, iterations, err := a.executeLoop(ctx, messages, cbManager, maxIter)
+	result, iterations, err := a.executeLoop[Output](ctx, messages, cbManager, maxIter)
 	if err != nil {
 		cbManager.OnError(err, "run")
 		return zero, err
@@ -149,8 +164,27 @@ func (a *Agent[Output]) Invoke(ctx context.Context, config InvokeConfig) (Output
 	return result, nil
 }
 
+// InvokeSimple is a convenience method for simple prompts
+func (a *Agent) InvokeSimple[Output any](ctx context.Context, prompt string) (Output, error) {
+	return a.Invoke[Output](ctx, InvokeConfig{Prompt: prompt})
+}
+
+// InvokeWithMessages is a convenience method for message-based invocation
+func (a *Agent) InvokeWithMessages[Output any](
+	ctx context.Context,
+	messages []openai.ChatCompletionMessageParamUnion,
+) (Output, error) {
+	return a.Invoke[Output](ctx, InvokeConfig{Messages: messages})
+}
+
+// Ask runs a prompt and returns the reply as text. It is Invoke[string] under a
+// shorter name, for the common case where there is no schema to fill.
+func (a *Agent) Ask(ctx context.Context, prompt string) (string, error) {
+	return a.Invoke[string](ctx, InvokeConfig{Prompt: prompt})
+}
+
 // mergeCallbacks merges invoke and agent callbacks, prioritizing invoke callbacks
-func (a *Agent[Output]) mergeCallbacks(invokeCallbacks []callback.AgentCallback) []callback.AgentCallback {
+func (a *Agent) mergeCallbacks(invokeCallbacks []callback.AgentCallback) []callback.AgentCallback {
 	allCallbacks := make([]callback.AgentCallback, 0)
 	allCallbacks = append(allCallbacks, invokeCallbacks...)
 	seenCallbackNames := map[string]struct{}{}
@@ -166,7 +200,7 @@ func (a *Agent[Output]) mergeCallbacks(invokeCallbacks []callback.AgentCallback)
 }
 
 // buildMessages constructs the message list from InvokeConfig
-func (a *Agent[Output]) buildMessages(config InvokeConfig) ([]openai.ChatCompletionMessageParamUnion, error) {
+func (a *Agent) buildMessages(config InvokeConfig) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var messages []openai.ChatCompletionMessageParamUnion
 
 	// Add system prompt if provided
@@ -190,8 +224,9 @@ func (a *Agent[Output]) buildMessages(config InvokeConfig) ([]openai.ChatComplet
 	return messages, nil
 }
 
-// executeLoop runs the agent's tool calling loop
-func (a *Agent[Output]) executeLoop(
+// executeLoop runs the agent's tool calling loop, decoding the final message into
+// Output.
+func (a *Agent) executeLoop[Output any](
 	ctx context.Context,
 	messages []openai.ChatCompletionMessageParamUnion,
 	cbManager *callback.Manager,
@@ -235,10 +270,9 @@ func (a *Agent[Output]) executeLoop(
 		}
 
 		// Check if Output is a struct type for response_format
-		var outputType Output
-		if !isStringType(outputType) {
+		if !isStringType(zero) {
 			// Add response format for structured output
-			outputSchema := schema.InferJSONSchema(outputType)
+			outputSchema := schema.InferJSONSchema(zero)
 			params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
 					JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
@@ -277,7 +311,7 @@ func (a *Agent[Output]) executeLoop(
 		// Check if we're done (no tool calls means we have final response)
 		if len(toolCalls) == 0 {
 			// Parse output
-			if isStringType(outputType) {
+			if isStringType(zero) {
 				// Return string directly
 				return any(content).(Output), iteration, nil
 			}
@@ -292,14 +326,12 @@ func (a *Agent[Output]) executeLoop(
 		}
 
 		// Execute tool calls
-		if len(toolCalls) > 0 {
-			toolMessages, err := a.executeToolCalls(ctx, toolCalls, cbManager)
-			if err != nil {
-				cbManager.OnError(err, "tool")
-				return zero, iteration, err
-			}
-			messages = append(messages, toolMessages...)
+		toolMessages, err := a.executeToolCalls(ctx, toolCalls, cbManager)
+		if err != nil {
+			cbManager.OnError(err, "tool")
+			return zero, iteration, err
 		}
+		messages = append(messages, toolMessages...)
 	}
 
 	err := fmt.Errorf("max iterations (%d) reached without completion", maxIterations)
@@ -308,7 +340,7 @@ func (a *Agent[Output]) executeLoop(
 }
 
 // executeToolCalls executes all tool calls and returns tool messages
-func (a *Agent[Output]) executeToolCalls(
+func (a *Agent) executeToolCalls(
 	ctx context.Context,
 	toolCalls []openai.ChatCompletionMessageToolCall,
 	cbManager *callback.Manager,
@@ -362,14 +394,8 @@ func (a *Agent[Output]) executeToolCalls(
 			return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 		}
 
-		// Create Context wrapper
-		ctxWrapper := &Context{
-			Context: ctx,
-			logger:  a.client.Logger,
-		}
-
 		// Execute tool
-		result, err := toolCopy.Execute(ctxWrapper)
+		result, err := toolCopy.Execute(NewContext(ctx, a.client.Logger))
 		cbManager.OnToolCallEnd(toolName, args, result, toolCallID, err)
 
 		if err != nil {
@@ -416,26 +442,13 @@ func isStringType(v interface{}) bool {
 	return ok
 }
 
-// InvokeSimple is a convenience method for simple prompts
-func (a *Agent[Output]) InvokeSimple(ctx context.Context, prompt string) (Output, error) {
-	return a.Invoke(ctx, InvokeConfig{Prompt: prompt})
-}
-
-// InvokeWithMessages is a convenience method for message-based invocation
-func (a *Agent[Output]) InvokeWithMessages(
-	ctx context.Context,
-	messages []openai.ChatCompletionMessageParamUnion,
-) (Output, error) {
-	return a.Invoke(ctx, InvokeConfig{Messages: messages})
-}
-
 // Client returns the underlying Client
-func (a *Agent[Output]) Client() *Client {
+func (a *Agent) Client() *Client {
 	return a.client
 }
 
 // Tools returns the agent's tools as a slice
-func (a *Agent[Output]) Tools() []ToolExecutor {
+func (a *Agent) Tools() []ToolExecutor {
 	tools := make([]ToolExecutor, 0, len(a.tools))
 	for _, tool := range a.tools {
 		tools = append(tools, tool)
@@ -444,7 +457,7 @@ func (a *Agent[Output]) Tools() []ToolExecutor {
 }
 
 // Model returns the agent's model
-func (a *Agent[Output]) Model() string {
+func (a *Agent) Model() string {
 	return a.model
 }
 

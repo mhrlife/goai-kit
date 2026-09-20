@@ -22,7 +22,7 @@ type DocumentSearch struct {
 // Filter represents a search filter condition
 type Filter struct {
 	Field    string      // Metadata field name to filter on
-	Operator FilterOp   // Filter operator
+	Operator FilterOp    // Filter operator
 	Value    interface{} // Value to compare against
 }
 
