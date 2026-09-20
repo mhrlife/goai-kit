@@ -1,5 +1,8 @@
 # GoAI Kit
 
+[![CI](https://github.com/mhrlife/goai-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/mhrlife/goai-kit/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mhrlife/goai-kit.svg)](https://pkg.go.dev/github.com/mhrlife/goai-kit)
+
 A simple, no-magic Go library for interacting with OpenAI-compatible LLMs. Get structured JSON, plain text, or use tools
 with minimal boilerplate.
 
@@ -10,6 +13,17 @@ Requires **Go 1.27** or newer, for generic methods.
 ```bash
 go get github.com/mhrlife/goai-kit
 ```
+
+## Development
+
+```bash
+make install-tools   # golangci-lint and goimports, built with the Go in go.mod
+make check           # format-check + lint + test, the same gates CI runs
+```
+
+golangci-lint has to be built with a Go at least as new as the one in `go.mod`,
+so `make install-tools` builds it from source rather than downloading a release
+binary. A release binary built with an older Go refuses the module outright.
 
 ## Migrating from the pre-1.27 API
 
