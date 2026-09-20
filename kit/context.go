@@ -29,6 +29,6 @@ func (c *Context) Logger() *slog.Logger {
 	return c.logger
 }
 
-func (c *Context) WithValue(key any, value any) {
+func (c *Context) WithValue(key, value any) {
 	c.Context = context.WithValue(c.Context, key, value)
 }

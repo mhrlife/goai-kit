@@ -6,12 +6,13 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/mhrlife/goai-kit/callback"
-	"github.com/mhrlife/goai-kit/schema"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/openai/openai-go/shared"
+
+	"github.com/mhrlife/goai-kit/callback"
+	"github.com/mhrlife/goai-kit/schema"
 )
 
 // Agent is a configured way of calling a model: a set of tools, a model name, the
@@ -99,8 +100,8 @@ func (a *Agent) WithCallbacks(callbacks ...callback.AgentCallback) *Agent {
 }
 
 // WithMaxIterations sets the maximum number of tool calling iterations
-func (a *Agent) WithMaxIterations(max int) *Agent {
-	a.maxIterations = max
+func (a *Agent) WithMaxIterations(n int) *Agent {
+	a.maxIterations = n
 	return a
 }
 
@@ -213,11 +214,12 @@ func (a *Agent) buildMessages(config InvokeConfig) ([]openai.ChatCompletionMessa
 		return nil, fmt.Errorf("cannot specify both Prompt and Messages")
 	}
 
-	if config.Prompt != "" {
+	switch {
+	case config.Prompt != "":
 		messages = append(messages, openai.UserMessage(config.Prompt))
-	} else if len(config.Messages) > 0 {
+	case len(config.Messages) > 0:
 		messages = append(messages, config.Messages...)
-	} else {
+	default:
 		return nil, fmt.Errorf("must specify either Prompt or Messages")
 	}
 
@@ -298,7 +300,7 @@ func (a *Agent) executeLoop[Output any](
 		}
 
 		choice := completion.Choices[0]
-		finishReason := string(choice.FinishReason)
+		finishReason := choice.FinishReason
 		content := choice.Message.Content
 		toolCalls := choice.Message.ToolCalls
 
@@ -311,9 +313,9 @@ func (a *Agent) executeLoop[Output any](
 		// Check if we're done (no tool calls means we have final response)
 		if len(toolCalls) == 0 {
 			// Parse output
-			if isStringType(zero) {
-				// Return string directly
-				return any(content).(Output), iteration, nil
+			if out, ok := any(content).(Output); ok {
+				// Output is string: hand back the message as it came.
+				return out, iteration, nil
 			}
 
 			// Parse JSON for structured output
@@ -381,12 +383,17 @@ func (a *Agent) executeToolCalls(
 
 		// Create a copy of the tool struct to unmarshal args into
 		toolValue := reflect.ValueOf(executor)
-		if toolValue.Kind() == reflect.Ptr {
+		if toolValue.Kind() == reflect.Pointer {
 			toolValue = toolValue.Elem()
 		}
 
 		// Create a new instance of the tool
-		toolCopy := reflect.New(toolValue.Type()).Interface().(ToolExecutor)
+		toolCopy, ok := reflect.New(toolValue.Type()).Interface().(ToolExecutor)
+		if !ok {
+			err := fmt.Errorf("tool %s does not implement ToolExecutor on its pointer type", toolName)
+			cbManager.OnToolCallEnd(toolName, args, nil, toolCallID, err)
+			return nil, err
+		}
 
 		// Unmarshal args into the tool copy
 		if err := json.Unmarshal([]byte(toolCall.Function.Arguments), toolCopy); err != nil {
@@ -437,8 +444,8 @@ func resultToString(result interface{}) (string, error) {
 }
 
 // isStringType checks if a type is string
-func isStringType(v interface{}) bool {
-	_, ok := any(v).(string)
+func isStringType(v any) bool {
+	_, ok := v.(string)
 	return ok
 }
 

@@ -16,6 +16,14 @@ func main() {
 		log.Fatal("set OPENROUTER_API_KEY")
 	}
 	client := jev.New(jev.NewOpenRouterClientConfig(key, jev.OpenRouterModel))
+	if err := run(client); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// run keeps the work in a function that returns, so the deferred cancel and any
+// other cleanup still happen on the error path.
+func run(client *jev.Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	response, err := client.Decide(ctx, "My payment has failed three times today.", jev.Questions{
@@ -30,24 +38,25 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	// Each answer is read back as the type the question asked for. A mismatch or a
 	// missing id is an error here, not a panic somewhere later.
 	urgent, err := response.Answer[jev.NoulAnswer]("urgent")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	team, err := response.Answer[jev.ChoiceAnswer]("team")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	frustration, err := response.Answer[jev.ScoreAnswer]("frustration")
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	fmt.Printf("urgent:      probability of yes = %.2f\n", urgent.Noul)
 	fmt.Printf("team:        %s (confidence %.2f)\n", team.Choice, team.Confidence)
 	fmt.Printf("frustration: %.2f (confidence %.2f)\n", frustration.Score, frustration.Confidence)
+	return nil
 }

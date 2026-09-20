@@ -106,7 +106,7 @@ func (lc *LangfuseCallback) Name() string {
 
 // OnRunStart creates a root span for the agent run
 func (lc *LangfuseCallback) OnRunStart(ctx map[string]interface{}) {
-	runID := ctx["run_id"].(string)
+	runID, _ := ctx["run_id"].(string)
 	parentRunID := lc.getParentRunID(ctx)
 
 	// Only create root span if this is not a nested run
@@ -362,7 +362,7 @@ func (lc *LangfuseCallback) OnToolCallEnd(ctx map[string]interface{}) {
 
 	// Check for error
 	if errVal, hasError := ctx["error"]; hasError && errVal != nil {
-		errMsg := errVal.(string)
+		errMsg, _ := errVal.(string)
 		toolSpan.SetStatus(codes.Error, errMsg)
 		toolSpan.RecordError(fmt.Errorf("%s", errMsg))
 	} else {
@@ -424,8 +424,8 @@ func (lc *LangfuseCallback) OnError(ctx map[string]interface{}) {
 
 // getParentRunID extracts parent_run_id from context
 func (lc *LangfuseCallback) getParentRunID(ctx map[string]interface{}) string {
-	if parentID, exists := ctx["parent_run_id"]; exists && parentID != nil {
-		return parentID.(string)
+	if parentID, ok := ctx["parent_run_id"].(string); ok {
+		return parentID
 	}
 	return ""
 }

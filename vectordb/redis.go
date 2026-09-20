@@ -8,8 +8,9 @@ import (
 	"math"
 	"strings"
 
-	"github.com/mhrlife/goai-kit/embedding"
 	"github.com/redis/go-redis/v9"
+
+	"github.com/mhrlife/goai-kit/embedding"
 )
 
 type RedisVectorDB struct {
