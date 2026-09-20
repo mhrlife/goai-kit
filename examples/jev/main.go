@@ -15,7 +15,7 @@ func main() {
 	if key == "" {
 		log.Fatal("set OPENROUTER_API_KEY")
 	}
-	client := jev.New(key)
+	client := jev.New(jev.NewOpenRouterClientConfig(key, jev.OpenRouterModel))
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	response, err := client.Decide(ctx, "My payment has failed three times today.", jev.Questions{

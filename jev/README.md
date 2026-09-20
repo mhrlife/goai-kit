@@ -11,10 +11,36 @@ Jev evaluates a state against named questions and returns structured answers:
 | `ChoiceQuestion` | `ChoiceAnswer` | Selected option, full probability distribution, and confidence |
 | `ScoreQuestion` | `ScoreAnswer` | Weighted rubric score, legend, probability distribution, and confidence |
 
-## OpenRouter
+## Configuration
+
+A client is built from a `ClientConfig`: the endpoint URL, the API key, and the
+default model. Each provider has a constructor that fills the URL for you, so you
+never pair the wrong URL with the wrong model slug:
 
 ```go
-client := jev.New(os.Getenv("OPENROUTER_API_KEY"))
+// OpenRouter
+config := jev.NewOpenRouterClientConfig(os.Getenv("OPENROUTER_API_KEY"), jev.OpenRouterModel)
+
+// TypeSafe
+config := jev.NewTypeSafeClientConfig(os.Getenv("TYPESAFE_API_KEY"), jev.TypeSafeModel)
+```
+
+Pass the config to `jev.New`:
+
+```go
+client := jev.New(config)
+```
+
+`BaseURL` is the **full endpoint URL**, including its path:
+OpenRouter is `https://openrouter.ai/api/alpha/decisions` with model
+`~typesafe/jev-latest`, TypeSafe is `https://api.typesafe.ai/v1/systemone` with
+model `jev-latest`. See the [TypeSafe API reference](https://docs.typesafe.ai/api).
+To reach another deployment, build the `jev.ClientConfig` yourself.
+
+## Usage
+
+```go
+client := jev.New(jev.NewOpenRouterClientConfig(os.Getenv("OPENROUTER_API_KEY"), jev.OpenRouterModel))
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
 
@@ -41,27 +67,13 @@ For a complete program demonstrating all three primitives, see
 go run ./examples/jev
 ```
 
-## TypeSafe
-
-Configure the endpoint and model together before making calls:
-
-```go
-client := jev.New(os.Getenv("TYPESAFE_API_KEY"))
-client.BaseURL = jev.TypeSafeURL
-client.Model = jev.TypeSafeModel
-```
-
-`BaseURL` is the **full endpoint URL**, including its path. Defaults are
-`https://openrouter.ai/api/alpha/decisions` and `~typesafe/jev-latest`;
-TypeSafe uses `https://api.typesafe.ai/v1/systemone` and `jev-latest`.
-See the [TypeSafe API reference](https://docs.typesafe.ai/api).
-
-## Requests and configuration
+## Requests and behavior
 
 - State and instructions accept strings, objects, or arrays that `encoding/json` can encode.
 - Question types include their `type` discriminator automatically. Question IDs map to matching answer IDs.
 - `Options` maps choice names to descriptions. An empty description encodes as JSON `null`.
 - Score criteria are ordered level descriptions; provide at least two levels.
+- The config is embedded in the client, so `client.BaseURL` and `client.Model` can still be adjusted before the first call.
 - Use `client.Do(ctx, &jev.Request{...})` for an explicit request. A nonempty request model overrides the client default. `Do` does not modify the request.
 - Set `client.HTTP` for custom transports or timeouts. A nil `HTTP` uses `http.DefaultClient`.
 - There is no default timeout: use a context deadline or an HTTP client timeout.

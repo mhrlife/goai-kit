@@ -44,7 +44,7 @@ func TestClientDo(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client := New("test-key")
+			client := New(NewOpenRouterClientConfig("test-key", OpenRouterModel))
 			client.BaseURL = server.URL + "/decisions"
 			client.HTTP = nil // The default transport must work too.
 			req := &Request{Model: model, State: "Help!", Questions: Questions{"urgent": NoulQuestion{Instructions: "Urgent?"}}}
@@ -82,7 +82,7 @@ func TestClientErrors(t *testing.T) {
 				}
 			}))
 			defer server.Close()
-			client := New("test-key")
+			client := New(NewOpenRouterClientConfig("test-key", OpenRouterModel))
 			client.BaseURL = server.URL
 			_, err := client.Decide(context.Background(), "state", Questions{})
 			var apiErr *APIError
@@ -101,7 +101,7 @@ func TestClientErrors(t *testing.T) {
 }
 
 func TestClientInvalidRequests(t *testing.T) {
-	client := New("test-key")
+	client := New(NewOpenRouterClientConfig("test-key", OpenRouterModel))
 	if _, err := client.Do(context.Background(), nil); err == nil {
 		t.Fatal("accepted nil request")
 	}
@@ -117,7 +117,7 @@ func TestClientInvalidRequests(t *testing.T) {
 func TestClientCancellation(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { t.Error("sent canceled request") }))
 	defer server.Close()
-	client := New("test-key")
+	client := New(NewOpenRouterClientConfig("test-key", OpenRouterModel))
 	client.BaseURL = server.URL
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -154,7 +154,7 @@ func TestClientResponseFailures(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := &trackedBody{Reader: tc.reader}
-			client := New("test-key")
+			client := New(NewOpenRouterClientConfig("test-key", OpenRouterModel))
 			client.HTTP = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 				return &http.Response{StatusCode: 200, Body: body, Header: make(http.Header)}, nil
 			})}

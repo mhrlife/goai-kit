@@ -23,31 +23,56 @@ const (
 	TypeSafeModel   = "jev-latest"
 )
 
-// Client calls one Jev endpoint. The zero value is not usable; use New. Its fields
-// may be changed before the first call, for example to point BaseURL at TypeSafe:
+// Client calls one Jev endpoint. The zero value is not usable; build one with New
+// and a ClientConfig from NewOpenRouterClientConfig or NewTypeSafeClientConfig:
 //
-//	c := jev.New(key)
-//	c.BaseURL, c.Model = jev.TypeSafeURL, jev.TypeSafeModel
+//	client := jev.New(jev.NewTypeSafeClientConfig(key, jev.TypeSafeModel))
 //
-// HTTP keep-alive is on by default, so a series of calls pays the TLS handshake once.
+// The embedded ClientConfig may still be adjusted before the first call. HTTP
+// keep-alive is on by default, so a series of calls pays the TLS handshake once.
 type Client struct {
+	ClientConfig
+	// HTTP is the client used for the call; replace it to set a timeout or a transport.
+	HTTP *http.Client
+}
+
+// ClientConfig holds the per-provider settings of a Client: where to send the
+// request, which credential to send, and which model answers by default. The two
+// providers differ in both URL and model slug, so set them together.
+type ClientConfig struct {
 	// BaseURL is the full endpoint URL, not just a host.
 	BaseURL string
 	APIKey  string
 	// Model is used by Decide for requests that do not name one themselves.
 	Model string
-	// HTTP is the client used for the call; replace it to set a timeout or a transport.
-	HTTP *http.Client
 }
 
-// New returns a client configured for OpenRouter. Set HTTP.Timeout or use a
-// context deadline to bound request duration.
-func New(apiKey string) *Client {
-	return &Client{
+// NewOpenRouterClientConfig returns a config for the OpenRouter endpoint. Pass
+// OpenRouterModel as model unless you are pinning a specific slug.
+func NewOpenRouterClientConfig(apiKey string, model string) ClientConfig {
+	return ClientConfig{
 		BaseURL: OpenRouterURL,
 		APIKey:  apiKey,
-		Model:   OpenRouterModel,
-		HTTP:    &http.Client{},
+		Model:   model,
+	}
+}
+
+// NewTypeSafeClientConfig returns a config for the TypeSafe endpoint. Pass
+// TypeSafeModel as model unless you are pinning a specific slug.
+func NewTypeSafeClientConfig(apiKey string, model string) ClientConfig {
+	return ClientConfig{
+		BaseURL: TypeSafeURL,
+		APIKey:  apiKey,
+		Model:   model,
+	}
+}
+
+// New returns a client for the endpoint named by config. Set HTTP.Timeout or use
+// a context deadline to bound request duration.
+func New(config ClientConfig) *Client {
+	return &Client{
+		ClientConfig: config,
+		HTTP:         &http.Client{},
 	}
 }
 
