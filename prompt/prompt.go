@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"path/filepath"
 	"text/template"
+
+	"github.com/mhrlife/goai-kit/schema"
 )
 
 type Render[Context any] struct {
@@ -107,8 +109,8 @@ func toJSONwSchema(v interface{}) string {
 		return "Error converting to JSON: " + err.Error()
 	}
 
-	jsonschema := MarshalToSchema(v)
-	jsonSchemaBytes, err := json.MarshalIndent(jsonschema, "", "  ")
+	inferred := schema.MarshalToSchema(v)
+	jsonSchemaBytes, err := json.MarshalIndent(inferred, "", "  ")
 	if err != nil {
 		return "Error converting schema to JSON: " + err.Error()
 	}

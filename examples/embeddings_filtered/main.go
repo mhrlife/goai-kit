@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/mhrlife/goai-kit/embedding"
 	"github.com/mhrlife/goai-kit/kit"
 	"github.com/mhrlife/goai-kit/vectordb"
-	"github.com/redis/go-redis/v9"
 )
 
 func main() {

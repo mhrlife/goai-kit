@@ -1,13 +1,58 @@
 # GoAI Kit
 
+[![CI](https://github.com/mhrlife/goai-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/mhrlife/goai-kit/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/mhrlife/goai-kit.svg)](https://pkg.go.dev/github.com/mhrlife/goai-kit)
+
 A simple, no-magic Go library for interacting with OpenAI-compatible LLMs. Get structured JSON, plain text, or use tools
 with minimal boilerplate.
 
 ## Installation
 
+Requires **Go 1.27** or newer, for generic methods.
+
 ```bash
 go get github.com/mhrlife/goai-kit
 ```
+
+## Development
+
+```bash
+make install-tools   # golangci-lint and goimports, built with the Go in go.mod
+make check           # format-check + lint + test, the same gates CI runs
+```
+
+golangci-lint has to be built with a Go at least as new as the one in `go.mod`,
+so `make install-tools` builds it from source rather than downloading a release
+binary. A release binary built with an older Go refuses the module outright.
+
+## Migrating from the pre-1.27 API
+
+The output type used to live on the agent, because Go could not put a type
+parameter on a method. It now lives on the call, so one agent serves every
+output shape:
+
+```go
+// before
+agent := kit.CreateAgentWithOutput[Review](client, tools...)
+out, err := agent.Invoke(ctx, cfg)
+
+// after
+agent := client.Agent(tools...)
+out, err := agent.Invoke[Review](ctx, cfg)
+text, err := agent.Ask(ctx, "and some prose from the same agent")
+```
+
+| before | after |
+| --- | --- |
+| `kit.CreateAgent(client, tools...)` | `client.Agent(tools...)` |
+| `kit.CreateAgentWithOutput[T](client, tools...)` | `client.Agent(tools...)`, then `Invoke[T]` |
+| `agent.Invoke(ctx, cfg)` | `agent.Invoke[T](ctx, cfg)` |
+| `agent.InvokeSimple(ctx, prompt)` | `agent.InvokeSimple[T](ctx, prompt)` or `agent.Ask(ctx, prompt)` |
+| `agent.InvokeWithMessages(ctx, msgs)` | `agent.InvokeWithMessages[T](ctx, msgs)` |
+| `resp.Answers["id"].(jev.NoulAnswer)` | `resp.Answer[jev.NoulAnswer]("id")` |
+
+`*Agent[Output]` is now `*Agent`. `kit.NewAgent(client, tools...)` is `client.Agent`
+as a function, for call sites that prefer it.
 
 ## Jev decisions
 
@@ -44,11 +89,11 @@ func main() {
 	// Create a client
 	client := kit.NewClient(kit.WithDefaultModel("gpt-4o-mini"))
 
-	// Create agent with typed output
-	agent := kit.CreateAgentWithOutput[MyOutput](client)
+	// Create an agent. The output type belongs to the call, not the agent.
+	agent := client.Agent()
 
 	// Get a structured response
-	output, err := agent.Invoke(context.Background(), kit.InvokeConfig{
+	output, err := agent.Invoke[MyOutput](context.Background(), kit.InvokeConfig{
 		Prompt: "Say hello and give me the number 42.",
 	})
 	if err != nil {
@@ -78,13 +123,10 @@ import (
 func main() {
 	client := kit.NewClient(kit.WithDefaultModel("gpt-4o-mini"))
 
-	// Create a simple agent that returns strings
-	agent := kit.CreateAgent(client)
+	agent := client.Agent()
 
-	// Get a plain string response
-	joke, err := agent.Invoke(context.Background(), kit.InvokeConfig{
-		Prompt: "Tell me a short joke.",
-	})
+	// Ask is Invoke[string] under a shorter name
+	joke, err := agent.Ask(context.Background(), "Tell me a short joke.")
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -147,12 +189,10 @@ func main() {
 	)
 
 	// 3. Create agent with tools
-	agent := kit.CreateAgent(client, &AverageNumbersTool{})
+	agent := client.Agent(&AverageNumbersTool{})
 
 	// 4. Invoke agent
-	result, err := agent.Invoke(context.Background(), kit.InvokeConfig{
-		Prompt: "What is the average of the numbers 10, 20, 30, 40, and 50?",
-	})
+	result, err := agent.Ask(context.Background(), "What is the average of the numbers 10, 20, 30, 40, and 50?")
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}
@@ -328,9 +368,9 @@ func main() {
 		kit.WithDefaultModel("openai/gpt-4o-mini"),
 	)
 
-	agent := kit.CreateAgent(client)
+	agent := client.Agent()
 
-	result, err := agent.Invoke(context.Background(), kit.InvokeConfig{
+	result, err := agent.Invoke[string](context.Background(), kit.InvokeConfig{
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
 				openai.TextContentPart("Describe the following image in 20 words"),
@@ -481,16 +521,14 @@ func main() {
 	)
 
 	// 3. Create agent with tools and add Langfuse callback
-	agent := kit.CreateAgent(client, &AverageNumbersTool{}).
+	agent := client.Agent(&AverageNumbersTool{}).
 		WithCallbacks(callback.NewLangfuseCallback(callback.LangfuseCallbackConfig{
 			Tracer:      tracer.Tracer(),
 			ServiceName: "average-calculator",
 		}))
 
 	// 4. Invoke agent - all calls are automatically traced
-	result, err := agent.Invoke(context.Background(), kit.InvokeConfig{
-		Prompt: "What is the average of the numbers 10, 20, 30, 40, and 50?",
-	})
+	result, err := agent.Ask(context.Background(), "What is the average of the numbers 10, 20, 30, 40, and 50?")
 	if err != nil {
 		log.Fatalf("Error: %v", err)
 	}

@@ -119,3 +119,36 @@ func TestNullMaps(t *testing.T) {
 		}
 	}
 }
+
+func TestResponseAnswer(t *testing.T) {
+	resp := &Response{Answers: Answers{
+		"urgent": NoulAnswer{Noul: 0.92},
+		"team":   ChoiceAnswer{Choice: "billing", Confidence: 0.8},
+		"mood":   ScoreAnswer{Score: 1.4, Confidence: 0.6},
+	}}
+
+	noul, err := resp.Answer[NoulAnswer]("urgent")
+	if err != nil || noul.Noul != 0.92 {
+		t.Fatalf("Answer[NoulAnswer] = %#v, %v", noul, err)
+	}
+	choice, err := resp.Answer[ChoiceAnswer]("team")
+	if err != nil || choice.Choice != "billing" {
+		t.Fatalf("Answer[ChoiceAnswer] = %#v, %v", choice, err)
+	}
+	score, err := resp.Answer[ScoreAnswer]("mood")
+	if err != nil || score.Score != 1.4 {
+		t.Fatalf("Answer[ScoreAnswer] = %#v, %v", score, err)
+	}
+
+	// A key that was never asked about.
+	if _, err := resp.Answer[NoulAnswer]("missing"); err == nil ||
+		!strings.Contains(err.Error(), `no answer for question "missing"`) {
+		t.Fatalf("unexpected error for missing key: %v", err)
+	}
+
+	// The right key, the wrong type: an error, not a panic.
+	_, err = resp.Answer[NoulAnswer]("team")
+	if err == nil || !strings.Contains(err.Error(), "is a choice answer") {
+		t.Fatalf("unexpected error for type mismatch: %v", err)
+	}
+}

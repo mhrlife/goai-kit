@@ -50,7 +50,7 @@ type ClientConfig struct {
 
 // NewOpenRouterClientConfig returns a config for the OpenRouter endpoint. Pass
 // OpenRouterModel as model unless you are pinning a specific slug.
-func NewOpenRouterClientConfig(apiKey string, model string) ClientConfig {
+func NewOpenRouterClientConfig(apiKey, model string) ClientConfig {
 	return ClientConfig{
 		BaseURL: OpenRouterURL,
 		APIKey:  apiKey,
@@ -60,7 +60,7 @@ func NewOpenRouterClientConfig(apiKey string, model string) ClientConfig {
 
 // NewTypeSafeClientConfig returns a config for the TypeSafe endpoint. Pass
 // TypeSafeModel as model unless you are pinning a specific slug.
-func NewTypeSafeClientConfig(apiKey string, model string) ClientConfig {
+func NewTypeSafeClientConfig(apiKey, model string) ClientConfig {
 	return ClientConfig{
 		BaseURL: TypeSafeURL,
 		APIKey:  apiKey,

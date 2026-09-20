@@ -1,67 +1,78 @@
+version: "2"
+
 run:
-  timeout: 5m
-  tests: true
   modules-download-mode: readonly
+  tests: true
 
 linters:
   enable:
-    - errcheck        # Check for unchecked errors
-    - gosimple        # Simplify code
-    - govet           # Vet examines Go source code
-    - ineffassign     # Detect ineffectual assignments
-    - staticcheck     # Advanced Go linter
-    - typecheck       # Type-check Go code
-    - unused          # Check for unused constants, variables, functions
-    - gofmt           # Check formatting
-    - goimports       # Check import formatting
-    - misspell        # Find misspelled English words
-    - revive          # Fast, configurable, extensible linter
-    - gosec           # Security-focused linter
-    - gocritic        # Opinionated linter
-    - unparam         # Find unused function parameters
-    - unconvert       # Remove unnecessary type conversions
-    - prealloc        # Find slice declarations that could be preallocated
-    - exportloopref   # Check for pointers to loop variables
+    - errcheck
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - misspell
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
 
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
+  settings:
+    errcheck:
+      # An unchecked type assertion panics; an explicit `_` is a decision the
+      # author already wrote down, so only the first is worth reporting.
+      check-type-assertions: true
+      check-blank: false
 
-  govet:
-    enable-all: true
+    govet:
+      enable-all: true
+      disable:
+        # Reorders struct fields to shave pointer-scanning bytes. The wire and
+        # config structs here are read far more often than they are allocated.
+        - fieldalignment
+        # Rebinding err inside a narrower scope is ordinary Go.
+        - shadow
 
-  gofmt:
-    simplify: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+      disabled-checks:
+        - unnamedResult
+        - hugeParam
+        # Ranging by value over a large struct is fine outside a hot loop, and
+        # indexing instead costs more readability than it buys.
+        - rangeValCopy
 
-  goimports:
-    local-prefixes: github.com/mhrlife/goai-kit
+    revive:
+      confidence: 0.8
 
-  revive:
-    confidence: 0.8
+    gosec:
+      excludes:
+        - G104 # Covered by errcheck.
 
-  gosec:
-    excludes:
-      - G104  # Allow unhandled errors in some cases
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
-      - performance
-    disabled-checks:
-      - unnamedResult
-      - hugeParam
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+    rules:
+      # A test may assert a type it just constructed and ignore an error it is
+      # deliberately provoking.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
 
 issues:
-  exclude-use-default: false
   max-issues-per-linter: 0
   max-same-issues: 0
 
-  exclude-rules:
-    # Exclude some linters from test files
-    - path: _test\.go
-      linters:
-        - gosec
-        - errcheck
-        - gocritic
+# No `formatters:` section on purpose. golangci-lint's gofmt/goimports run
+# through a forked parser that rejects Go 1.27 generic methods with
+# "method must have no type parameters". Formatting is checked in CI with the
+# toolchain's own gofmt and goimports instead; put this back once upstream
+# catches up.

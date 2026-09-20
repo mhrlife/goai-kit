@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Generic methods need 1.27. setup-go resolves this from go.mod, but the
+  # toolchain has to be pinned for the tools built below too.
+  GO_VERSION: "1.27.x"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: coverage.out
+          if-no-files-found: error
+
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+
+      # golangci-lint's own gofmt/goimports use a forked parser that rejects
+      # generic methods, so formatting is checked with the toolchain's gofmt and
+      # a goimports built against the same Go version.
+      - name: gofmt
+        run: |
+          unformatted=$("$(go env GOROOT)/bin/gofmt" -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt'd:"
+            echo "$unformatted"
+            "$(go env GOROOT)/bin/gofmt" -d .
+            exit 1
+          fi
+
+      - name: goimports
+        run: |
+          go install golang.org/x/tools/cmd/goimports@latest
+          # Merge stderr in: a goimports built against an older Go fails to
+          # parse generic methods, and that must fail the job rather than look
+          # like an empty list of unformatted files.
+          out=$(goimports -local github.com/mhrlife/goai-kit -l . 2>&1)
+          if [ -n "$out" ]; then
+            echo "goimports is unhappy:"
+            echo "$out"
+            goimports -local github.com/mhrlife/goai-kit -d . || true
+            exit 1
+          fi
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+
+      # Not golangci-lint-action: it installs a prebuilt binary, and a binary
+      # built with an older Go refuses a module that targets a newer one
+      # ("the Go language version used to build golangci-lint is lower than the
+      # targeted Go version"). Building from source uses the Go above.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+
+      - name: Lint
+        run: golangci-lint run --timeout 5m ./...

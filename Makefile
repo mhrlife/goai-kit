@@ -1,7 +1,7 @@
 .PHONY: help build test lint lint-fix format format-check clean install-tools
 
-# Source files
-SRCS := $(shell find . -name '*.go' -not -path "./vendor/*")
+# Keep in step with .github/workflows/ci.yml
+GOLANGCI_LINT_VERSION := v2.13.2
 
 # Default target
 help:
@@ -32,30 +32,35 @@ test-verbose:
 test-coverage: test
 	go tool cover -html=coverage.out
 
-# Run linter
+# Run linter. golangci-lint must be built with a Go at least as new as the one
+# in go.mod, so install it with `make install-tools` rather than from a release.
 lint:
-	golangci-lint run
+	golangci-lint run --timeout 5m ./...
 
 # Run linter and auto-fix
 lint-fix:
-	golangci-lint run --fix
+	golangci-lint run --fix --timeout 5m ./...
 
-# Format code
+# Format code. GOFMT comes from the active toolchain: a gofmt from an older Go
+# rejects generic methods with "method must have no type parameters".
+GOFMT := $(shell go env GOROOT)/bin/gofmt
+
 format:
-	@echo "Running golines"
-	@golines --ignore-generated --base-formatter gofmt -m 120 -w $(SRCS)
-	@echo "Running gofumpt"
-	@gofumpt -w $(SRCS)
-	@echo "Running gci"
-	@gci write --skip-generated -s standard -s default -s "prefix(git.divar.cloud/divar/search/post-list)" .
-	goimports -w .
-	gofmt -w -s .
+	$(GOFMT) -w -s .
+	goimports -local github.com/mhrlife/goai-kit -w .
 
 # Check formatting
 format-check:
-	@if [ -n "$$(gofmt -l .)" ]; then \
+	@if [ -n "$$($(GOFMT) -l .)" ]; then \
 		echo "The following files are not formatted:"; \
-		gofmt -l .; \
+		$(GOFMT) -l .; \
+		exit 1; \
+	fi
+	@out=$$(goimports -local github.com/mhrlife/goai-kit -l . 2>&1); \
+	if [ -n "$$out" ]; then \
+		echo "goimports is unhappy (misordered imports, or a goimports older"; \
+		echo "than the Go in go.mod, which cannot parse generic methods):"; \
+		echo "$$out"; \
 		exit 1; \
 	fi
 
@@ -66,10 +71,11 @@ clean:
 
 # Install required tools
 install-tools:
-	@echo "Installing golangci-lint..."
-	@which golangci-lint > /dev/null || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin
+	@echo "Installing golangci-lint (from source: a release binary built with an"
+	@echo "older Go refuses a module targeting a newer one)"
+	go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	@echo "Installing goimports..."
-	@which goimports > /dev/null || go install golang.org/x/tools/cmd/goimports@latest
+	go install golang.org/x/tools/cmd/goimports@latest
 	@echo "All tools installed!"
 
 # Run all checks (format + lint + test)

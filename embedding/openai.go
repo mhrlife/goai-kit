@@ -3,8 +3,9 @@ package embedding
 import (
 	"context"
 
-	"github.com/mhrlife/goai-kit/kit"
 	"github.com/openai/openai-go"
+
+	"github.com/mhrlife/goai-kit/kit"
 )
 
 type OpenAIEmbeddings struct {

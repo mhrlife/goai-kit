@@ -13,11 +13,13 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mhrlife/goai-kit/kit"
 	"gopkg.in/yaml.v3"
+
+	"github.com/mhrlife/goai-kit/kit"
 )
 
 func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExecutor) (*server.MCPServer, error) {
@@ -30,7 +32,7 @@ func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExe
 	for _, tool := range tools {
 		if err := addGenericToolToMCP(client, s, tool); err != nil {
 			schema := kit.BuildToolSchema(tool)
-			client.logger.Error("Failed to add tool",
+			client.Logger.Error("Failed to add tool",
 				"tool_name", schema.ID,
 				"error", err,
 			)
@@ -38,8 +40,8 @@ func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExe
 			return nil, err
 		}
 
-		schema := BuildToolSchema(tool)
-		client.logger.Info("Added MCP tool",
+		schema := kit.BuildToolSchema(tool)
+		client.Logger.Info("Added MCP tool",
 			"server_name", name,
 			"tool_name", schema.ID,
 			"tool_description", schema.Description,
@@ -49,8 +51,8 @@ func NewMCPServer(client *kit.Client, name, version string, tools ...kit.ToolExe
 	return s, nil
 }
 
-func addGenericToolToMCP(client *Client, s *server.MCPServer, tool ToolExecutor) error {
-	schema := BuildToolSchema(tool)
+func addGenericToolToMCP(client *kit.Client, s *server.MCPServer, tool kit.ToolExecutor) error {
+	schema := kit.BuildToolSchema(tool)
 
 	schemaJSON, err := json.Marshal(schema.JSONSchema)
 	if err != nil {
@@ -69,21 +71,21 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool ToolExecutor)
 
 			// Create a copy of the tool struct
 			toolValue := reflect.ValueOf(tool)
-			if toolValue.Kind() == reflect.Ptr {
+			if toolValue.Kind() == reflect.Pointer {
 				toolValue = toolValue.Elem()
 			}
 
 			// Create new instance and unmarshal args
-			toolCopy := reflect.New(toolValue.Type()).Interface().(ToolExecutor)
+			toolCopy, ok := reflect.New(toolValue.Type()).Interface().(kit.ToolExecutor)
+			if !ok {
+				return nil, fmt.Errorf("tool %s does not implement ToolExecutor on its pointer type", schema.ID)
+			}
 			if err := json.Unmarshal(argsJSON, toolCopy); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 			}
 
 			// Execute tool
-			ctxWrapper := &Context{
-				Context: ctx,
-				logger:  client.logger,
-			}
+			ctxWrapper := kit.NewContext(ctx, client.Logger)
 
 			result, err := toolCopy.Execute(ctxWrapper)
 			if err != nil {
@@ -91,9 +93,9 @@ func addGenericToolToMCP(client *Client, s *server.MCPServer, tool ToolExecutor)
 			}
 
 			stringResult := ""
-			switch result.(type) {
+			switch result := result.(type) {
 			case string:
-				stringResult = result.(string)
+				stringResult = result
 			default:
 				yamlMarshalled, err := yaml.Marshal(result)
 				if err != nil {
@@ -128,6 +130,10 @@ func StartSSEServerWithRoutes(addr string, routes ...ServerRoute) error {
 	httpSrv := &http.Server{
 		Addr:    addr,
 		Handler: mux,
+		// SSE streams for as long as the client stays connected, so only the
+		// header read is bounded here; a write or idle timeout would cut the
+		// stream itself.
+		ReadHeaderTimeout: 10 * time.Second,
 	}
 
 	for _, route := range routes {
@@ -188,7 +194,9 @@ func StartSSEServerWithRoutes(addr string, routes ...ServerRoute) error {
 				"routes":  routes_info,
 			}
 
-			json.NewEncoder(w).Encode(response)
+			if err := json.NewEncoder(w).Encode(response); err != nil {
+				slog.Error("Failed to write server hub index", "error", err)
+			}
 			return
 		}
 
@@ -201,7 +209,7 @@ func StartSSEServerWithRoutes(addr string, routes ...ServerRoute) error {
 		"routes_count", len(routes),
 	)
 
-	return http.ListenAndServe(addr, mux)
+	return httpSrv.ListenAndServe()
 }
 
 // StartSSEServer - keep the original function for backward compatibility
@@ -243,7 +251,12 @@ func LogHTTP(next http.Handler) http.Handler {
 		next.ServeHTTP(lw, r)
 
 		// Dump AFTER the request finishes; remove or move if you need live logs.
-		log.Printf("\n---- %s %s -> %d ----\n%s\n",
+		// The method and path come from the request, so quote them rather than
+		// letting a crafted path forge log lines.
+		//
+		//nolint:gosec // G706: this helper exists to log request data; %q keeps
+		// a crafted method or path from forging a log line.
+		log.Printf("---- %q %q -> %d ----\n%s\n",
 			r.Method, r.URL.Path, lw.status, lw.buf.String())
 	})
 }
@@ -261,6 +274,11 @@ func (l *loggedWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return nil, nil, fmt.Errorf("hijacker not supported")
 }
 
+// CloseNotify forwards to the wrapped ResponseWriter. http.CloseNotifier is
+// deprecated, but a wrapper that drops it silently breaks handlers that still
+// ask for it, so it is implemented here on purpose.
+//
+//nolint:staticcheck // SA1019: forwarding a deprecated interface, not using it.
 func (l *loggedWriter) CloseNotify() <-chan bool {
 	if c, ok := l.ResponseWriter.(http.CloseNotifier); ok {
 		return c.CloseNotify()

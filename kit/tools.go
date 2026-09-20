@@ -39,7 +39,7 @@ func GetAgentToolInfo(tool ToolExecutor) AgentToolInfo {
 	// If name is empty, generate it from type name using reflection
 	if info.Name == "" {
 		t := reflect.TypeOf(tool)
-		if t.Kind() == reflect.Ptr {
+		if t.Kind() == reflect.Pointer {
 			t = t.Elem()
 		}
 		info.Name = typeNameToToolName(t.Name())

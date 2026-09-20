@@ -62,11 +62,11 @@ func main() {
     })
 
     // Create agent with callback
-    agent := goaikit.CreateAgent(tracedLLM.Client()).
+    agent := tracedLLM.Client().Agent().
         WithCallbacks(callback)
 
     // Run agent
-    result, err := agent.InvokeSimple(ctx, "Hello!")
+    result, err := agent.Ask(ctx, "Hello!")
     if err != nil {
         panic(err)
     }

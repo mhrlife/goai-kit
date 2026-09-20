@@ -1,0 +1,67 @@
+run:
+  timeout: 5m
+  tests: true
+  modules-download-mode: readonly
+
+linters:
+  enable:
+    - errcheck        # Check for unchecked errors
+    - gosimple        # Simplify code
+    - govet           # Vet examines Go source code
+    - ineffassign     # Detect ineffectual assignments
+    - staticcheck     # Advanced Go linter
+    - typecheck       # Type-check Go code
+    - unused          # Check for unused constants, variables, functions
+    - gofmt           # Check formatting
+    - goimports       # Check import formatting
+    - misspell        # Find misspelled English words
+    - revive          # Fast, configurable, extensible linter
+    - gosec           # Security-focused linter
+    - gocritic        # Opinionated linter
+    - unparam         # Find unused function parameters
+    - unconvert       # Remove unnecessary type conversions
+    - prealloc        # Find slice declarations that could be preallocated
+    - exportloopref   # Check for pointers to loop variables
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+
+  govet:
+    enable-all: true
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: github.com/mhrlife/goai-kit
+
+  revive:
+    confidence: 0.8
+
+  gosec:
+    excludes:
+      - G104  # Allow unhandled errors in some cases
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - unnamedResult
+      - hugeParam
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Exclude some linters from test files
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck
+        - gocritic
