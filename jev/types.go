@@ -11,6 +11,7 @@ package jev
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Type is the primitive a question is asked in, and the one its answer comes back in.
@@ -34,11 +35,18 @@ type Response struct {
 	Model   string  `json:"model"`
 	Answers Answers `json:"answers"`
 	Usage   Usage   `json:"usage"`
-	// LatencySeconds is added by OpenRouter; the TypeSafe API itself does not send it.
-	LatencySeconds float64 `json:"latency_seconds,omitempty"`
+	// ID and Provider are sent by OpenRouter only; TypeSafe leaves them empty.
+	// ID identifies the generation in OpenRouter's logs.
+	ID       string `json:"id,omitempty"`
+	Provider string `json:"provider,omitempty"`
+	// Latency is measured by this package around the HTTP round trip, because
+	// neither provider reports one. It therefore includes network time, and is
+	// zero on a Response that was unmarshaled rather than fetched.
+	Latency time.Duration `json:"-"`
 }
 
-// Usage reports the tokens the request cost. Cost is OpenRouter's, in dollars.
+// Usage reports the tokens the request cost. Cost is OpenRouter's, in dollars;
+// TypeSafe does not price the call in its response, so it stays zero there.
 type Usage struct {
 	InputTokens  int     `json:"input_tokens"`
 	OutputTokens int     `json:"output_tokens"`

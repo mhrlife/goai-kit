@@ -78,7 +78,10 @@ go run ./examples/jev
 - Set `client.HTTP` for custom transports or timeouts. A nil `HTTP` uses `http.DefaultClient`.
 - There is no default timeout: use a context deadline or an HTTP client timeout.
 - Configure the client before concurrent use, and do not mutate shared request maps or state while calls are running.
-- Responses include token usage and, when returned by OpenRouter, cost and latency.
+- Responses always include token usage. `Usage.Cost` (dollars), `ID` and `Provider` are
+  filled by OpenRouter only; TypeSafe leaves them at their zero value.
+- Neither provider reports a latency, so `Response.Latency` is measured by this package
+  around the HTTP round trip. It includes network time and is not part of the JSON.
 - Unknown question or answer types produce an error containing the affected question ID.
 
 ## Errors

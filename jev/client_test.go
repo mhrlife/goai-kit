@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestClientDo(t *testing.T) {
@@ -111,6 +112,24 @@ func TestClientInvalidRequests(t *testing.T) {
 	client.BaseURL = ":invalid"
 	if _, err := client.Decide(context.Background(), "state", nil); err == nil {
 		t.Fatal("accepted invalid URL")
+	}
+}
+
+func TestClientMeasuresLatency(t *testing.T) {
+	const delay = 20 * time.Millisecond
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(delay)
+		_, _ = w.Write([]byte(`{"model":"jev-latest","answers":{},"usage":{"input_tokens":1,"output_tokens":1}}`))
+	}))
+	defer server.Close()
+	client := New(NewOpenRouterClientConfig("test-key", OpenRouterModel))
+	client.BaseURL = server.URL
+	resp, err := client.Decide(context.Background(), "state", Questions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Latency < delay {
+		t.Fatalf("latency %v, want at least %v", resp.Latency, delay)
 	}
 }
 

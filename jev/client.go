@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // Endpoints. The path is part of the base URL because the two providers do not
@@ -107,6 +108,7 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
+	start := time.Now()
 	httpResp, err := httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("jev: %w", err)
@@ -127,6 +129,9 @@ func (c *Client) Do(ctx context.Context, req *Request) (*Response, error) {
 	if err := json.Unmarshal(respBody, &resp); err != nil {
 		return nil, fmt.Errorf("jev: decode response: %w", err)
 	}
+	// Neither provider reports a latency, so time the round trip here. The body is
+	// already read, so this covers the whole call rather than the headers alone.
+	resp.Latency = time.Since(start)
 	return &resp, nil
 }
 

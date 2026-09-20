@@ -39,7 +39,7 @@ func TestAnswersDecode(t *testing.T) {
  "urgent":{"type":"noul","noul":0.92},
  "team":{"type":"choice","choice":"billing","probabilities":{"billing":0.8,"other":0.2},"confidence":0.7},
  "rating":{"type":"score","score":0.6,"legend":{"0":"Low","1":"High"},"probabilities":{"0":0.4,"1":0.6},"confidence":0.2}
- },"usage":{"input_tokens":312,"output_tokens":48,"cost":0.01},"latency_seconds":0.4}`)
+ },"usage":{"input_tokens":312,"output_tokens":48,"cost":0.01},"id":"gen-dec-1","provider":"TypeSafe"}`)
 	var got Response
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestAnswersDecode(t *testing.T) {
 	if !reflect.DeepEqual(got.Answers, want) {
 		t.Fatalf("got %#v, want %#v", got.Answers, want)
 	}
-	if got.Model != "jev-latest" || got.Usage.InputTokens != 312 || got.Usage.OutputTokens != 48 || got.Usage.Cost != 0.01 || got.LatencySeconds != 0.4 {
+	if got.Model != "jev-latest" || got.Usage.InputTokens != 312 || got.Usage.OutputTokens != 48 || got.Usage.Cost != 0.01 || got.ID != "gen-dec-1" || got.Provider != "TypeSafe" {
 		t.Fatalf("lost metadata: %+v", got)
 	}
 	encoded, err := json.Marshal(got)
