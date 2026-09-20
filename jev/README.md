@@ -52,9 +52,9 @@ response, err := client.Decide(ctx, "My payment keeps failing.", jev.Questions{
 if err != nil {
     return err
 }
-answer, ok := response.Answers["urgent"].(jev.NoulAnswer)
-if !ok {
-    return fmt.Errorf("missing or unexpected urgent answer")
+answer, err := response.Answer[jev.NoulAnswer]("urgent")
+if err != nil {
+    return err
 }
 fmt.Println(answer.Noul)
 ```
@@ -74,6 +74,9 @@ go run ./examples/jev
 - `Options` maps choice names to descriptions. An empty description encodes as JSON `null`.
 - Score criteria are ordered level descriptions; provide at least two levels.
 - The config is embedded in the client, so `client.BaseURL` and `client.Model` can still be adjusted before the first call.
+- `response.Answer[A]("id")` reads one answer as its concrete type. It errors on an unknown id or a
+  type that does not match the question asked, so it never panics. The raw `response.Answers` map is
+  still there when you want to range over every answer with a type switch.
 - Use `client.Do(ctx, &jev.Request{...})` for an explicit request. A nonempty request model overrides the client default. `Do` does not modify the request.
 - Set `client.HTTP` for custom transports or timeouts. A nil `HTTP` uses `http.DefaultClient`.
 - There is no default timeout: use a context deadline or an HTTP client timeout.

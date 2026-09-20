@@ -32,14 +32,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	for id, answer := range response.Answers {
-		switch answer := answer.(type) {
-		case jev.NoulAnswer:
-			fmt.Printf("%s: probability of yes = %.2f\n", id, answer.Noul)
-		case jev.ChoiceAnswer:
-			fmt.Printf("%s: %s (confidence %.2f)\n", id, answer.Choice, answer.Confidence)
-		case jev.ScoreAnswer:
-			fmt.Printf("%s: %.2f (confidence %.2f)\n", id, answer.Score, answer.Confidence)
-		}
+	// Each answer is read back as the type the question asked for. A mismatch or a
+	// missing id is an error here, not a panic somewhere later.
+	urgent, err := response.Answer[jev.NoulAnswer]("urgent")
+	if err != nil {
+		log.Fatal(err)
 	}
+	team, err := response.Answer[jev.ChoiceAnswer]("team")
+	if err != nil {
+		log.Fatal(err)
+	}
+	frustration, err := response.Answer[jev.ScoreAnswer]("frustration")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Printf("urgent:      probability of yes = %.2f\n", urgent.Noul)
+	fmt.Printf("team:        %s (confidence %.2f)\n", team.Choice, team.Confidence)
+	fmt.Printf("frustration: %.2f (confidence %.2f)\n", frustration.Score, frustration.Confidence)
 }

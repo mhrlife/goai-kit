@@ -45,6 +45,27 @@ type Response struct {
 	Latency time.Duration `json:"-"`
 }
 
+// Answer returns the answer stored under key as the concrete answer type A:
+//
+//	p, err := resp.Answer[jev.NoulAnswer]("urgent")
+//	c, err := resp.Answer[jev.ChoiceAnswer]("team")
+//
+// This replaces asserting on the Answers map by hand. The constraint keeps the
+// assertion honest: only an answer type can be named, and a mismatch between the
+// question asked and the type expected comes back as an error rather than a panic.
+func (r *Response) Answer[A Answer](key string) (A, error) {
+	var zero A
+	a, ok := r.Answers[key]
+	if !ok {
+		return zero, fmt.Errorf("jev: no answer for question %q", key)
+	}
+	typed, ok := a.(A)
+	if !ok {
+		return zero, fmt.Errorf("jev: answer %q is a %s answer, not %T", key, a.Type(), zero)
+	}
+	return typed, nil
+}
+
 // Usage reports the tokens the request cost. Cost is OpenRouter's, in dollars;
 // TypeSafe does not price the call in its response, so it stays zero there.
 type Usage struct {
